@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Free Throw — Chapter 7</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+/* =====================================================================
+ * CONFIG — the single source of truth for every number in the game.
+ * Frozen so nothing can change it by accident (constants live in one
+ * place, with names instead of magic numbers).
+ * ===================================================================== */
+const CONFIG = Object.freeze({
+  world:   { width: 920, height: 540, floorY: 500 },
+  physics: {
+    gravity: 1800,          // px/s² — pulls the ball down every frame
+    floorRestitution: 0.55, // energy kept after a floor bounce (0..1)
+    floorFriction: 0.98,    // horizontal slowdown while rolling
+    restSpeed: 25           // below this speed the ball is "at rest"
+  },
+  ball:  { startX: 180, startY: 458, radius: 17 },
+  hoop:  {
+    boardX: 812, boardTop: 168, boardBottom: 318,
+    rimY: 300, rimFrontX: 726, rimBackX: 800,
+    rimThickness: 5, netDepth: 52
+  }
+});
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+/* =====================================================================
+ * The ball — still Chapter 6's falling demo; Chapter 8 hands it to you.
+ * ===================================================================== */
+const ball = {
+  x: CONFIG.ball.startX,
+  y: 80,
+  vx: 120,
+  vy: 0,
+  radius: CONFIG.ball.radius
+};
+
+/**
+ * Advance the ball one time step using projectile motion.
+ * @param {number} dt seconds elapsed since the last frame
+ */
+function integrateBall(dt) {
+  ball.vy += CONFIG.physics.gravity * dt; // gravity accelerates vy
+  ball.x += ball.vx * dt;                 // position follows velocity
+  ball.y += ball.vy * dt;
+}
+
+/** @returns {number} current speed in px/s */
+function ballSpeed() {
+  return Math.hypot(ball.vx, ball.vy);
+}
+
+/** Bounce on the hardwood, lose energy, and eventually come to rest. */
+function collideFloor() {
+  if (ball.y + ball.radius <= CONFIG.world.floorY) return; // still airborne
+
+  ball.y = CONFIG.world.floorY - ball.radius;              // snap out of the floor
+  ball.vy = -ball.vy * CONFIG.physics.floorRestitution;    // bounce, losing energy
+  ball.vx *= CONFIG.physics.floorFriction;                 // rolling slows down
+
+  if (ballSpeed() < CONFIG.physics.restSpeed) {            // slow enough: stop
+    ball.vx = 0;
+    ball.vy = 0;
+  }
+}
+
+/** Paint the gym-wall gradient behind everything. */
+function drawBackground() {
+  const { width, height } = CONFIG.world;
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#1b2c47");
+  g.addColorStop(1, "#101c30");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+}
+
+/** Hardwood floor, plank seams, and the free-throw marker. */
+function drawCourt() {
+  const { width, height, floorY } = CONFIG.world;
+
+  // Hardwood floor
+  const wood = ctx.createLinearGradient(0, floorY, 0, height);
+  wood.addColorStop(0, "#c08145");
+  wood.addColorStop(1, "#8f5a2b");
+  ctx.fillStyle = wood;
+  ctx.fillRect(0, floorY, width, height - floorY);
+
+  // Plank seams
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  for (let x = 40; x < width; x += 92) {
+    ctx.beginPath();
+    ctx.moveTo(x, floorY);
+    ctx.lineTo(x - 14, height);
+    ctx.stroke();
+  }
+
+  // Free-throw marker under the ball's starting spot
+  ctx.strokeStyle = "rgba(242,234,216,0.5)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(CONFIG.ball.startX - 34, floorY + 1.5);
+  ctx.lineTo(CONFIG.ball.startX + 34, floorY + 1.5);
+  ctx.stroke();
+}
+
+/** Backboard, pole and the net (drawn behind the ball). */
+function drawHoopBack() {
+  const h = CONFIG.hoop;
+
+  // Pole
+  ctx.fillStyle = "#2c3e5c";
+  ctx.fillRect(h.boardX + 8, h.boardTop + 30, 12, CONFIG.world.floorY - h.boardTop - 30);
+
+  // Backboard glass
+  ctx.fillStyle = "rgba(232,238,246,0.88)";
+  ctx.fillRect(h.boardX, h.boardTop, 8, h.boardBottom - h.boardTop);
+
+  // Net (simple crossing lines from rim down)
+  ctx.strokeStyle = "rgba(242,234,216,0.65)";
+  ctx.lineWidth = 1.5;
+  const bottomY = h.rimY + h.netDepth;
+  const inset = 14;
+  for (let i = 0; i <= 4; i++) {
+    const topX = h.rimFrontX + ((h.rimBackX - h.rimFrontX) * i) / 4;
+    const botX = h.rimFrontX + inset + ((h.rimBackX - h.rimFrontX - inset * 2) * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(topX, h.rimY);
+    ctx.lineTo(botX, bottomY);
+    ctx.stroke();
+  }
+}
+
+/** The rim itself, drawn in front so the ball appears to pass through. */
+function drawHoopFront() {
+  const h = CONFIG.hoop;
+  ctx.strokeStyle = "#e23d28";
+  ctx.lineWidth = h.rimThickness * 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(h.rimFrontX, h.rimY);
+  ctx.lineTo(h.rimBackX, h.rimY);
+  ctx.stroke();
+}
+
+/**
+ * Draw the ball centered at (x, y): floor shadow, body, and seams.
+ * @param {number} x horizontal center in pixels
+ * @param {number} y vertical center in pixels
+ */
+function drawBall(x, y) {
+  const radius = CONFIG.ball.radius;
+
+  // Soft shadow on the floor, fading with height
+  const height = CONFIG.world.floorY - y;
+  const shrink = Math.max(0.35, 1 - height / 700);
+  ctx.fillStyle = `rgba(0,0,0,${0.28 * shrink})`;
+  ctx.beginPath();
+  ctx.ellipse(x, CONFIG.world.floorY + 6, radius * shrink * 1.2, 5 * shrink, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ball body
+  const g = ctx.createRadialGradient(x - 5, y - 6, 3, x, y, radius);
+  g.addColorStop(0, "#f5824e");
+  g.addColorStop(1, "#cf4d1c");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Seams
+  ctx.strokeStyle = "rgba(90,30,8,0.8)";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.moveTo(x - radius, y);
+  ctx.lineTo(x + radius, y);
+  ctx.moveTo(x, y - radius);
+  ctx.quadraticCurveTo(x + radius * 0.7, y, x, y + radius);
+  ctx.stroke();
+}
+
+let lastTime = 0;
+
+/**
+ * One animation frame: compute dt, update the world, draw it.
+ * @param {number} timestamp milliseconds from requestAnimationFrame
+ */
+function frame(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 1 / 30); // clamp big gaps
+  lastTime = timestamp;
+
+  integrateBall(dt);
+  collideFloor();
+
+  drawBackground();
+  drawCourt();
+  drawHoopBack();
+  drawBall(ball.x, ball.y);
+  drawHoopFront();
+
+  requestAnimationFrame(frame); // book the next page of the flipbook
+}
+
+/* ---------- Boot ---------- */
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

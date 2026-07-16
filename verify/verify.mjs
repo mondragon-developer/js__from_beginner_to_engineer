@@ -529,38 +529,55 @@ const CHAPTER_TESTS = {
     });
   },
 
-  "06": (js, KEY) => {
-    const load = () => {
+  "06": (js, KEY) => gravityAndBounceChecks("06", js, KEY),
+
+  "07": (js, KEY) => {
+    gravityAndBounceChecks("07", js, KEY);
+    check("ch07: the full scene's draw functions exist", () => {
       installStubs(makeEnv());
-      return evalExports(js, ["CONFIG", "ball", "integrateBall", "collideFloor", "ballSpeed"]);
-    };
-    check("ch06: CONFIG.physics matches the answer key", () => {
-      subsetEqual(load().CONFIG, KEY.CONFIG, "CONFIG");
-    });
-    check("ch06: milestone — y increases under gravity", () => {
-      const X = load();
-      const y0 = X.ball.y;
-      for (let i = 0; i < 10; i++) X.integrateBall(1 / 60);
-      assert(X.ball.vy > 0, `vy should grow positive (down); got ${X.ball.vy}`);
-      assert(X.ball.y > y0, `y should increase; got ${X.ball.y} from ${y0}`);
-    });
-    check("ch06: milestone — a floor bounce reverses vy, then the ball rests", () => {
-      const X = load();
-      let sawBounce = false;
-      let steps = 0;
-      while (X.ballSpeed() > 0 || steps === 0) {
-        const vyBefore = X.ball.vy;
-        X.integrateBall(1 / 60);
-        X.collideFloor();
-        if (vyBefore > 200 && X.ball.vy < 0) sawBounce = true;
-        steps += 1;
-        assert(steps < 4000, "ball never came to rest");
+      const X = evalExports(js, ["drawBackground", "drawCourt", "drawHoopBack", "drawHoopFront", "drawBall"]);
+      for (const [name, fn] of Object.entries(X)) {
+        assert(typeof fn === "function", `${name} must be a function`);
       }
-      assert(sawBounce, "never observed a bounce (fast fall then upward vy)");
-      approx(X.ball.y, X.CONFIG.world.floorY - X.ball.radius, 1e-6, "resting on the floor");
     });
   },
 };
+
+/**
+ * Chapter 6's physics milestones, reusable by later pre-class chapters
+ * (the scene changes; gravity and the floor must not regress).
+ */
+function gravityAndBounceChecks(nn, js, KEY) {
+  const load = () => {
+    installStubs(makeEnv());
+    return evalExports(js, ["CONFIG", "ball", "integrateBall", "collideFloor", "ballSpeed"]);
+  };
+  check(`ch${nn}: CONFIG matches the answer key`, () => {
+    subsetEqual(load().CONFIG, KEY.CONFIG, "CONFIG");
+  });
+  check(`ch${nn}: milestone — y increases under gravity`, () => {
+    const X = load();
+    const y0 = X.ball.y;
+    for (let i = 0; i < 10; i++) X.integrateBall(1 / 60);
+    assert(X.ball.vy > 0, `vy should grow positive (down); got ${X.ball.vy}`);
+    assert(X.ball.y > y0, `y should increase; got ${X.ball.y} from ${y0}`);
+  });
+  check(`ch${nn}: milestone — a floor bounce reverses vy, then the ball rests`, () => {
+    const X = load();
+    let sawBounce = false;
+    let steps = 0;
+    while (X.ballSpeed() > 0 || steps === 0) {
+      const vyBefore = X.ball.vy;
+      X.integrateBall(1 / 60);
+      X.collideFloor();
+      if (vyBefore > 200 && X.ball.vy < 0) sawBounce = true;
+      steps += 1;
+      assert(steps < 4000, "ball never came to rest");
+    }
+    assert(sawBounce, "never observed a bounce (fast fall then upward vy)");
+    approx(X.ball.y, X.CONFIG.world.floorY - X.ball.radius, 1e-6, "resting on the floor");
+  });
+}
 
 /* ===================================================================== *
  * Runner
