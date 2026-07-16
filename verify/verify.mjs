@@ -276,11 +276,12 @@ const CLASS_NAMES = [
   "PlayerPanel", "Renderer", "Scoreboard", "Game",
 ];
 
-function classModeBattery(label, strippedJs) {
+function classModeBattery(label, strippedJs, withStore = true) {
+  const names = withStore ? CLASS_NAMES : CLASS_NAMES.filter((n) => n !== "PlayerStore");
   let X = null;
-  check(`${label}: declares CONFIG and all 8 classes`, () => {
+  check(`${label}: declares CONFIG and all ${names.length - 1} classes`, () => {
     installStubs(makeEnv());
-    X = evalExports(strippedJs, CLASS_NAMES);
+    X = evalExports(strippedJs, names);
     assert(Object.isFrozen(X.CONFIG), "CONFIG must be Object.freeze'd");
   });
   if (!X) return null; // nothing else can run
@@ -465,6 +466,8 @@ function classModeBattery(label, strippedJs) {
     assert(game.state === "ready", "New session should return to ready");
     assert(game.session.shotsLeft === C.session.shotLimit, "New session should refill shots");
   });
+
+  if (!withStore) return X; // chapters before persistence stop here
 
   check(`${label}: ch14 milestone — PlayerStore honors one contract in both storage modes`, () => {
     // Persistent mode: data survives into a brand-new instance.
@@ -785,6 +788,29 @@ const CHAPTER_TESTS = {
     });
     sessionChecks("12", js);
     holdToChargeChecks("12", js);
+  },
+
+  "13": (js) => {
+    classModeBattery("ch13", js, false);
+  },
+
+  "14": (js, KEY) => {
+    check("ch14: equivalence gate — CONFIG deep-equals the answer key's", () => {
+      installStubs(makeEnv());
+      const X = evalExports(js, ["CONFIG"]);
+      subsetEqual(X.CONFIG, KEY.CONFIG, "CONFIG");
+      subsetEqual(KEY.CONFIG, X.CONFIG, "CONFIG(reverse)");
+    });
+    check("ch14: equivalence gate — the class list matches the answer key exactly", () => {
+      const declared = [...js.matchAll(/^class (\w+)/gm)].map((m) => m[1]).sort();
+      const expected = CLASS_NAMES.filter((n) => n !== "CONFIG").sort();
+      assert(
+        JSON.stringify(declared) === JSON.stringify(expected),
+        `classes declared: [${declared}] — answer key has: [${expected}]`
+      );
+    });
+    // "Every assertion the answer key passes, the snapshot passes":
+    classModeBattery("ch14", js, true);
   },
 };
 
