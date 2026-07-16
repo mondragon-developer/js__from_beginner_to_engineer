@@ -541,6 +541,48 @@ const CHAPTER_TESTS = {
       }
     });
   },
+
+  "08": (js, KEY) => {
+    gravityAndBounceChecks("08", js, KEY);
+    const load = () => {
+      const env = makeEnv();
+      installStubs(env);
+      const X = evalExports(js, [
+        "CONFIG", "ball", "input", "onPointerDown", "onPointerMove",
+        "onPointerUp", "power", "launchVelocity",
+      ]);
+      return { env, X };
+    };
+    check("ch08: milestone — power is 0 at press, 0.5 at half charge, capped at 1", () => {
+      const { env, X } = load();
+      env.now = 5000;
+      X.onPointerDown({ clientX: X.ball.x, clientY: X.ball.y - 150, pointerId: 1 });
+      approx(X.power(), 0, 1e-12, "power at the instant of pressing");
+      env.now += (X.CONFIG.input.chargeTime / 2) * 1000;
+      approx(X.power(), 0.5, 1e-9, "power at half chargeTime");
+      env.now += X.CONFIG.input.chargeTime * 5000;
+      approx(X.power(), 1, 1e-12, "power beyond full charge");
+    });
+    check("ch08: milestone — launch speed scales min→max, aim angle matches the pointer", () => {
+      const { env, X } = load();
+      env.now = 1000;
+      X.onPointerDown({ clientX: X.ball.x + 100, clientY: X.ball.y - 100, pointerId: 1 });
+      let v = X.launchVelocity();
+      approx(Math.hypot(v.vx, v.vy), X.CONFIG.physics.minLaunchSpeed, 1e-6, "speed at zero charge");
+      approx(Math.atan2(v.vy, v.vx), Math.atan2(-100, 100), 1e-9, "aim angle");
+      env.now += X.CONFIG.input.chargeTime * 1000 + 50;
+      v = X.launchVelocity();
+      approx(Math.hypot(v.vx, v.vy), X.CONFIG.physics.maxLaunchSpeed, 1e-6, "speed at full charge");
+    });
+    check("ch08: milestone — a pointer sitting on the ball fires no shot", () => {
+      const { X } = load();
+      X.onPointerDown({ clientX: X.ball.x, clientY: X.ball.y, pointerId: 1 });
+      assert(X.launchVelocity() === null, "launchVelocity should be null on the ball");
+      X.onPointerUp();
+      assert(X.ball.vx === 0 && X.ball.vy === 0, "release on the ball must not launch");
+      assert(X.input.isCharging === false, "charge should end on release");
+    });
+  },
 };
 
 /**
