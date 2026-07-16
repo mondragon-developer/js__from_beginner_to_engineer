@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chapter 4 — Exercise 2 (independent)</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+const CONFIG = Object.freeze({
+  world: { width: 920, height: 540, floorY: 500 },
+  ball:  { startX: 180, startY: 458, radius: 17 },
+  court: { markerHalf: 34 }
+});
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+ctx.fillStyle = "#16233a";
+ctx.fillRect(0, 0, CONFIG.world.width, CONFIG.world.height);
+
+ctx.fillStyle = "#a06a38";
+ctx.fillRect(0, CONFIG.world.floorY, CONFIG.world.width, CONFIG.world.height - CONFIG.world.floorY);
+
+// Free-throw marker: a 3px-thin rectangle acting as a line, centered on
+// the ball's spot and reaching markerHalf to each side.
+ctx.fillStyle = "#f2ead8";
+ctx.fillRect(CONFIG.ball.startX - CONFIG.court.markerHalf, CONFIG.world.floorY,
+             CONFIG.court.markerHalf * 2, 3);
+
+ctx.fillStyle = "#e0662f";
+ctx.beginPath();
+ctx.arc(CONFIG.ball.startX, CONFIG.ball.startY, CONFIG.ball.radius, 0, Math.PI * 2);
+ctx.fill();
+</script>
+</body>
+</html>

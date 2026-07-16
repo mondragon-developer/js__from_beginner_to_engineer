@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Free Throw — Chapter 4</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+/* =====================================================================
+ * CONFIG — the single source of truth for every number in the game.
+ * Frozen so nothing can change it by accident (constants live in one
+ * place, with names instead of magic numbers).
+ * ===================================================================== */
+const CONFIG = Object.freeze({
+  world: { width: 920, height: 540, floorY: 500 },
+  ball:  { startX: 180, startY: 458, radius: 17 }
+});
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+// Gym wall
+ctx.fillStyle = "#16233a";
+ctx.fillRect(0, 0, CONFIG.world.width, CONFIG.world.height);
+
+// Floor
+ctx.fillStyle = "#a06a38";
+ctx.fillRect(0, CONFIG.world.floorY, CONFIG.world.width, CONFIG.world.height - CONFIG.world.floorY);
+
+// The ball, waiting on the free-throw spot.
+ctx.fillStyle = "#e0662f";
+ctx.beginPath();
+ctx.arc(CONFIG.ball.startX, CONFIG.ball.startY, CONFIG.ball.radius, 0, Math.PI * 2);
+ctx.fill();
+</script>
+</body>
+</html>

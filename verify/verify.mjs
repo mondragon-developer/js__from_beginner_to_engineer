@@ -494,9 +494,72 @@ function classModeBattery(label, strippedJs) {
  * Key: two-digit chapter number → function(strippedJs, answerKeyExports).
  * ===================================================================== */
 
+/** Assert every key of `part` exists in `whole` with a deep-equal value. */
+function subsetEqual(part, whole, path) {
+  for (const [k, v] of Object.entries(part)) {
+    const w = whole?.[k];
+    if (typeof v === "object" && v !== null) {
+      subsetEqual(v, w, `${path}.${k}`);
+    } else {
+      assert(w === v, `${path}.${k} is ${v}, answer key says ${w}`);
+    }
+  }
+}
+
 const CHAPTER_TESTS = {
-  // 02–05: syntax gate only (declarations and drawing, no simulation yet).
-  // 06+: added as each chapter is built.
+  // 02–03: syntax gate only (first script, first rectangles).
+
+  "04": (js, KEY) => {
+    check("ch04: CONFIG is frozen and matches the answer key's world and ball", () => {
+      installStubs(makeEnv());
+      const { CONFIG } = evalExports(js, ["CONFIG"]);
+      assert(Object.isFrozen(CONFIG), "CONFIG must be Object.freeze'd");
+      subsetEqual(CONFIG, KEY.CONFIG, "CONFIG");
+    });
+  },
+
+  "05": (js, KEY) => {
+    check("ch05: drawCourt/drawBall/drawHoop exist; CONFIG.hoop matches the answer key", () => {
+      installStubs(makeEnv());
+      const X = evalExports(js, ["CONFIG", "drawCourt", "drawBall", "drawHoop"]);
+      for (const f of ["drawCourt", "drawBall", "drawHoop"]) {
+        assert(typeof X[f] === "function", `${f} must be a function`);
+      }
+      subsetEqual(X.CONFIG, KEY.CONFIG, "CONFIG");
+    });
+  },
+
+  "06": (js, KEY) => {
+    const load = () => {
+      installStubs(makeEnv());
+      return evalExports(js, ["CONFIG", "ball", "integrateBall", "collideFloor", "ballSpeed"]);
+    };
+    check("ch06: CONFIG.physics matches the answer key", () => {
+      subsetEqual(load().CONFIG, KEY.CONFIG, "CONFIG");
+    });
+    check("ch06: milestone — y increases under gravity", () => {
+      const X = load();
+      const y0 = X.ball.y;
+      for (let i = 0; i < 10; i++) X.integrateBall(1 / 60);
+      assert(X.ball.vy > 0, `vy should grow positive (down); got ${X.ball.vy}`);
+      assert(X.ball.y > y0, `y should increase; got ${X.ball.y} from ${y0}`);
+    });
+    check("ch06: milestone — a floor bounce reverses vy, then the ball rests", () => {
+      const X = load();
+      let sawBounce = false;
+      let steps = 0;
+      while (X.ballSpeed() > 0 || steps === 0) {
+        const vyBefore = X.ball.vy;
+        X.integrateBall(1 / 60);
+        X.collideFloor();
+        if (vyBefore > 200 && X.ball.vy < 0) sawBounce = true;
+        steps += 1;
+        assert(steps < 4000, "ball never came to rest");
+      }
+      assert(sawBounce, "never observed a bounce (fast fall then upward vy)");
+      approx(X.ball.y, X.CONFIG.world.floorY - X.ball.radius, 1e-6, "resting on the floor");
+    });
+  },
 };
 
 /* ===================================================================== *
