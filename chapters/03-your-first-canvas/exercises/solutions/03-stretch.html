@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chapter 3 — Exercise 3 (stretch)</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+ctx.fillStyle = "#16233a";
+ctx.fillRect(0, 0, 920, 540);
+
+ctx.fillStyle = "#a06a38";
+ctx.fillRect(0, 500, 920, 40);
+
+// Ceiling band along the top edge — same wood color, 20 tall.
+ctx.fillRect(0, 0, 920, 20);
+
+// The hoop's future support pole: 12 wide, rising from the floor.
+// Height = floor line (500) minus the pole's top (200) = 300 tall.
+ctx.fillStyle = "#2c3e5c";
+ctx.fillRect(820, 200, 12, 300);
+</script>
+</body>
+</html>

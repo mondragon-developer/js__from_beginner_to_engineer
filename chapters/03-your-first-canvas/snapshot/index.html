@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Free Throw — Chapter 3</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+// The canvas element, and the 2D context — the brush that paints on it.
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+// Gym wall: one dark blue rectangle covering the whole canvas.
+ctx.fillStyle = "#16233a";
+ctx.fillRect(0, 0, 920, 540);
+
+// Floor: a wooden band across the bottom (y grows DOWNWARD on a canvas).
+ctx.fillStyle = "#a06a38";
+ctx.fillRect(0, 500, 920, 40);
+</script>
+</body>
+</html>

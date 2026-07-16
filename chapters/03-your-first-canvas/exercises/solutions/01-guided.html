@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chapter 3 — Exercise 1 (guided)</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+ctx.fillStyle = "#16233a";
+ctx.fillRect(0, 0, 920, 540);
+
+// Thicker, darker floor: y start moved up to 480, height grown to 60.
+// The first number pair is WHERE the band starts; the second is its size.
+ctx.fillStyle = "#8f5a2b";
+ctx.fillRect(0, 480, 920, 60);
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chapter 3 — Exercise 2 (independent)</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+ctx.fillStyle = "#16233a";
+ctx.fillRect(0, 0, 920, 540);
+
+ctx.fillStyle = "#a06a38";
+ctx.fillRect(0, 500, 920, 40);
+
+// A centered 50×50 square: fillRect takes the top-left CORNER, so the
+// corner sits half a square up-left of the canvas center (460, 270).
+ctx.fillStyle = "#ffb43a";
+ctx.fillRect(920 / 2 - 25, 540 / 2 - 25, 50, 50);
+</script>
+</body>
+</html>
