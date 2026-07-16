@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Throw — Chapter 12</title>
+<style>
+  /* ---------- Design tokens ---------- */
+  :root {
+    --gym-wall: #16233a;
+    --gym-wall-deep: #0d1626;
+    --chalk: #f2ead8;
+    --scoreboard-amber: #ffb43a;
+    --panel: #0a121f;
+    --line: #223350;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: linear-gradient(180deg, var(--gym-wall) 0%, var(--gym-wall-deep) 100%);
+    color: var(--chalk);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 920px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 6px 10px;
+  }
+
+  h1 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  h1 span { color: var(--scoreboard-amber); }
+
+  .hint { font-size: 0.8rem; opacity: 0.65; }
+
+  /* ---------- Player controls ---------- */
+  .players {
+    width: 100%;
+    max-width: 920px;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .players select,
+  .players input {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--chalk);
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    border-radius: 6px;
+  }
+
+  .players select { flex: 1; }
+  .players input { flex: 1; min-width: 0; }
+  .players input::placeholder { color: rgba(242, 234, 216, 0.35); }
+
+  /* ---------- LED scoreboard ---------- */
+  .scoreboard {
+    width: 100%;
+    max-width: 920px;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .panel {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+
+  .panel .label {
+    font-size: 0.62rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.55;
+  }
+
+  .panel .value {
+    font-family: "Consolas", "SF Mono", monospace;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--scoreboard-amber);
+    text-shadow: 0 0 12px rgba(255, 180, 58, 0.45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Session status strip ---------- */
+  .status {
+    width: 100%;
+    max-width: 920px;
+    min-height: 1.3rem;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    color: var(--scoreboard-amber);
+    text-align: center;
+  }
+
+  /* ---------- Court canvas ---------- */
+  canvas {
+    width: 100%;
+    max-width: 920px;
+    border-radius: 10px;
+    display: block;
+    touch-action: none;          /* the canvas owns all touch gestures */
+    cursor: crosshair;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  footer {
+    width: 100%;
+    max-width: 920px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 6px;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid #33507d;
+    color: var(--chalk);
+    font: inherit;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  button:hover { border-color: var(--scoreboard-amber); color: var(--scoreboard-amber); }
+  button:focus-visible,
+  .players select:focus-visible,
+  .players input:focus-visible { outline: 2px solid var(--scoreboard-amber); outline-offset: 2px; }
+
+  .credit { font-size: 0.7rem; opacity: 0.4; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Free Throw <span>· JavaScript from Zero</span></h1>
+  <p class="hint">Hold anywhere to charge, aim, release to shoot</p>
+</header>
+
+<div class="players">
+  <select id="playerSelect" aria-label="Choose player"></select>
+  <input id="playerNameInput" type="text" maxlength="18" placeholder="New player name" aria-label="New player name">
+  <button id="addPlayerButton" type="button">Add</button>
+</div>
+
+<div class="scoreboard" aria-live="polite">
+  <div class="panel"><div class="label">Score</div><div class="value" id="score">0</div></div>
+  <div class="panel"><div class="label">Shots left</div><div class="value" id="shotsLeft">10</div></div>
+  <div class="panel"><div class="label">Streak</div><div class="value" id="streak">0</div></div>
+  <div class="panel"><div class="label">Best</div><div class="value" id="best">0</div></div>
+</div>
+
+<p class="status" id="sessionStatus" aria-live="polite"></p>
+
+<canvas id="court" width="920" height="540" aria-label="Basketball court. Hold anywhere to charge power, aim with the pointer, release to shoot."></canvas>
+
+<footer>
+  <button id="newSessionButton" type="button">New session</button>
+  <p class="credit">Chapter 12 of 14</p>
+</footer>
+
+<script>
+"use strict";
+
+/* =====================================================================
+ * CONFIG — the single source of truth for every number in the game.
+ * Frozen so nothing can change it by accident (constants live in one
+ * place, with names instead of magic numbers).
+ * ===================================================================== */
+const CONFIG = Object.freeze({
+  world:   { width: 920, height: 540, floorY: 500 },
+  physics: {
+    gravity: 1800,          // px/s² — pulls the ball down every frame
+    floorRestitution: 0.55, // energy kept after a floor bounce (0..1)
+    floorFriction: 0.98,    // horizontal slowdown while rolling
+    restSpeed: 25,          // below this speed the ball is "at rest"
+    rimRestitution: 0.65,   // energy kept after hitting the rim
+    boardRestitution: 0.6,  // energy kept after hitting the backboard
+    wallRestitution: 0.6,   // energy kept after hitting a wall or ceiling
+    minLaunchSpeed: 450,    // an instant tap still throws this hard
+    maxLaunchSpeed: 1500    // a fully charged shot throws this hard
+  },
+  ball:  { startX: 180, startY: 458, radius: 17 },
+  hoop:  {
+    boardX: 812, boardTop: 168, boardBottom: 318,
+    rimY: 300, rimFrontX: 726, rimBackX: 800,
+    rimThickness: 5, netDepth: 52
+  },
+  input: {
+    chargeTime: 1.2,     // seconds of holding to reach full power
+    previewSteps: 40,
+    previewDt: 1 / 45
+  },
+  powerBar: { x: 26, top: 160, bottom: 460, width: 14 },
+  session:  { shotLimit: 10 }
+});
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const shotsLeftEl = document.getElementById("shotsLeft");
+const streakEl = document.getElementById("streak");
+const bestEl = document.getElementById("best");
+const statusEl = document.getElementById("sessionStatus");
+const playerSelect = document.getElementById("playerSelect");
+const playerNameInput = document.getElementById("playerNameInput");
+
+/* =====================================================================
+ * Game state — the state machine that gives the game its rules.
+ * "ready": aiming allowed. "flight": physics runs. "sessionOver":
+ * the shot limit is spent; only New session (or a player switch)
+ * returns the game to "ready".
+ * ===================================================================== */
+const game = {
+  state: "ready",         // "ready" | "flight" | "sessionOver"
+  scoredThisShot: false,  // guard: one basket per shot, no double counting
+  celebrateUntil: 0,      // timestamp: rim glows until this moment
+  playerName: "",
+  session: { score: 0, shotsLeft: CONFIG.session.shotLimit, streak: 0 },
+  records: { bestStreak: 0, bestSession: 0 }
+};
+
+/* All known players and their records, by name — in memory only.
+ * Close the tab and they're gone: that is Chapter 14's problem. */
+const allPlayers = {};
+
+/* =====================================================================
+ * Ball — owns the ball's state and its motion (it integrates physics;
+ * it never draws and never reads input). The course's first class:
+ * the blueprint; `new Ball()` below builds the house.
+ * ===================================================================== */
+class Ball {
+  constructor() {
+    this.radius = CONFIG.ball.radius;
+    this.reset();
+  }
+
+  /** Put the ball back on the free-throw spot, motionless. */
+  reset() {
+    this.x = CONFIG.ball.startX;
+    this.y = CONFIG.ball.startY;
+    this.vx = 0;
+    this.vy = 0;
+  }
+
+  /**
+   * Launch the ball with an initial velocity.
+   * @param {number} vx horizontal speed in px/s
+   * @param {number} vy vertical speed in px/s (negative = upward)
+   */
+  launch(vx, vy) {
+    this.vx = vx;
+    this.vy = vy;
+  }
+
+  /**
+   * Advance the ball one time step using projectile motion.
+   * @param {number} dt seconds elapsed since the last frame
+   */
+  integrate(dt) {
+    this.vy += CONFIG.physics.gravity * dt; // gravity accelerates vy
+    this.x += this.vx * dt;                 // position follows velocity
+    this.y += this.vy * dt;
+  }
+
+  /** @returns {number} current speed in px/s */
+  speed() {
+    return Math.hypot(this.vx, this.vy);
+  }
+}
+
+/* =====================================================================
+ * Hoop — knows its own geometry and resolves collisions against a
+ * ball. It also detects a made basket.
+ * ===================================================================== */
+class Hoop {
+  constructor() {
+    const h = CONFIG.hoop;
+    this.rimY = h.rimY;
+    this.frontX = h.rimFrontX;
+    this.backX = h.rimBackX;
+    this.boardX = h.boardX;
+    this.boardTop = h.boardTop;
+    this.boardBottom = h.boardBottom;
+  }
+
+  /**
+   * Bounce the ball off the two rim points and the backboard.
+   * @param {Ball} ball the ball to test and correct
+   */
+  collide(ball) {
+    this.#collideRimPoint(ball, this.frontX, this.rimY);
+    this.#collideRimPoint(ball, this.backX, this.rimY);
+    this.#collideBoard(ball);
+  }
+
+  /**
+   * Treat one rim edge as a small solid circle and reflect the ball
+   * off it — the classic circle-vs-circle collision.
+   * @param {Ball} ball
+   * @param {number} px rim point x
+   * @param {number} py rim point y
+   */
+  #collideRimPoint(ball, px, py) {
+    const dx = ball.x - px;
+    const dy = ball.y - py;
+    const dist = Math.hypot(dx, dy);
+    const minDist = ball.radius + CONFIG.hoop.rimThickness;
+    if (dist === 0 || dist >= minDist) return;
+
+    // Normal = direction from rim point to ball center
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    // Push the ball out so it no longer overlaps the rim
+    ball.x = px + nx * minDist;
+    ball.y = py + ny * minDist;
+
+    // Reflect only if the ball is moving INTO the rim
+    const approaching = ball.vx * nx + ball.vy * ny;
+    if (approaching < 0) {
+      const r = CONFIG.physics.rimRestitution;
+      ball.vx -= (1 + r) * approaching * nx;
+      ball.vy -= (1 + r) * approaching * ny;
+    }
+  }
+
+  /**
+   * The backboard is a vertical wall: if the ball crosses it while
+   * moving right, mirror its horizontal velocity.
+   * @param {Ball} ball
+   */
+  #collideBoard(ball) {
+    const withinHeight = ball.y > this.boardTop && ball.y < this.boardBottom;
+    const crossing = ball.x + ball.radius > this.boardX && ball.vx > 0;
+    if (withinHeight && crossing) {
+      ball.x = this.boardX - ball.radius;
+      ball.vx = -ball.vx * CONFIG.physics.boardRestitution;
+    }
+  }
+
+  /**
+   * A basket counts when the ball's center crosses the rim line
+   * downward, inside the opening.
+   * @param {Ball} ball
+   * @param {number} previousY the ball's y on the previous frame
+   * @returns {boolean} true exactly on the frame the shot goes in
+   */
+  isScore(ball, previousY) {
+    const crossedDown = previousY <= this.rimY && ball.y > this.rimY && ball.vy > 0;
+    const insideOpening =
+      ball.x > this.frontX + ball.radius * 0.4 &&
+      ball.x < this.backX - ball.radius * 0.4;
+    return crossedDown && insideOpening;
+  }
+}
+
+const ball = new Ball();
+const hoop = new Hoop();
+
+/* =====================================================================
+ * Input state — one hold-to-charge gesture in progress (or not).
+ * ===================================================================== */
+const input = {
+  isCharging: false,
+  chargeStart: 0, // ms timestamp when the hold began
+  aimX: 0,        // current pointer position, world coordinates
+  aimY: 0
+};
+
+/**
+ * Convert a pointer event from screen pixels to world coordinates,
+ * compensating for the canvas being scaled by CSS.
+ * @param {PointerEvent} e
+ * @returns {{x: number, y: number}}
+ */
+function toWorld(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CONFIG.world.width / rect.width;
+  const scaleY = CONFIG.world.height / rect.height;
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+/**
+ * A press anywhere on the court begins charging — but only while the
+ * game is ready: the state machine closes Chapter 8's rough edge.
+ * @param {PointerEvent} e
+ */
+function onPointerDown(e) {
+  if (game.state !== "ready") return;
+  const p = toWorld(e);
+  canvas.setPointerCapture(e.pointerId);
+  input.isCharging = true;
+  input.chargeStart = performance.now();
+  input.aimX = p.x;
+  input.aimY = p.y;
+}
+
+/** @param {PointerEvent} e */
+function onPointerMove(e) {
+  if (!input.isCharging) return;
+  const p = toWorld(e);
+  input.aimX = p.x;
+  input.aimY = p.y;
+}
+
+/** Finish the hold: fire the charged shot if the aim has a direction. */
+function onPointerUp() {
+  if (!input.isCharging) return;
+  const shot = launchVelocity();
+  input.isCharging = false;
+  if (shot !== null) shoot(shot.vx, shot.vy);
+}
+
+/**
+ * How charged the shot is right now.
+ * @returns {number} 0 at the instant of pressing, 1 at full charge
+ */
+function power() {
+  const held = (performance.now() - input.chargeStart) / 1000;
+  return Math.min(held / CONFIG.input.chargeTime, 1);
+}
+
+/**
+ * Hold-to-charge rule: DIRECTION comes from where the pointer is
+ * relative to the ball; SPEED comes from how long the hold lasted,
+ * scaled between the minimum and maximum launch speeds.
+ * @returns {{vx: number, vy: number} | null} null when the pointer
+ *   sits exactly on the ball (no direction to aim)
+ */
+function launchVelocity() {
+  const dx = input.aimX - ball.x;
+  const dy = input.aimY - ball.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return null;
+
+  const { minLaunchSpeed, maxLaunchSpeed } = CONFIG.physics;
+  const speed = minLaunchSpeed + power() * (maxLaunchSpeed - minLaunchSpeed);
+  return { vx: (dx / length) * speed, vy: (dy / length) * speed };
+}
+
+/**
+ * Fire the shot: launch the ball, enter "flight", spend one shot.
+ * @param {number} vx horizontal speed in px/s
+ * @param {number} vy vertical speed in px/s (negative = upward)
+ */
+function shoot(vx, vy) {
+  ball.launch(vx, vy);
+  game.state = "flight";
+  game.scoredThisShot = false;
+  game.session.shotsLeft -= 1;
+  commit();
+}
+
+/** Keep the ball inside the gym: floor, both walls, and the ceiling. */
+function collideBounds() {
+  const { width, floorY } = CONFIG.world;
+  const r = ball.radius;
+  const wall = CONFIG.physics.wallRestitution;
+
+  // Floor: bounce and roll on the hardwood
+  if (ball.y + r > floorY) {
+    ball.y = floorY - r;
+    ball.vy = -ball.vy * CONFIG.physics.floorRestitution;
+    ball.vx *= CONFIG.physics.floorFriction;
+  }
+
+  // Ceiling: mirror the vertical velocity
+  if (ball.y - r < 0) {
+    ball.y = r;
+    ball.vy = -ball.vy * wall;
+  }
+
+  // Left wall: mirror the horizontal velocity
+  if (ball.x - r < 0) {
+    ball.x = r;
+    ball.vx = -ball.vx * wall;
+  }
+
+  // Right wall: same rule on the far side
+  if (ball.x + r > width) {
+    ball.x = width - r;
+    ball.vx = -ball.vx * wall;
+  }
+}
+
+/** @returns {boolean} true when the ball has settled on the floor */
+function shotIsOver() {
+  return (
+    ball.y + ball.radius >= CONFIG.world.floorY - 1 &&
+    ball.speed() < CONFIG.physics.restSpeed
+  );
+}
+
+/** Refresh the four LED panels from the game state. */
+function updateScoreboard() {
+  scoreEl.textContent = String(game.session.score);
+  shotsLeftEl.textContent = String(game.session.shotsLeft);
+  streakEl.textContent = String(game.session.streak);
+  bestEl.textContent = String(game.records.bestStreak);
+}
+
+/**
+ * Show (or clear) the session status line under the scoreboard.
+ * @param {string} text empty string hides the message
+ */
+function setStatus(text) {
+  statusEl.textContent = text;
+}
+
+/** Save the active player's records and refresh the panels. */
+function commit() {
+  allPlayers[game.playerName] = game.records;
+  updateScoreboard();
+}
+
+/** Fresh session: full shot count, zeroed score, ball on the line. */
+function newSession() {
+  game.session = { score: 0, shotsLeft: CONFIG.session.shotLimit, streak: 0 };
+  ball.reset();
+  game.state = "ready";
+  setStatus("");
+  updateScoreboard();
+}
+
+/** Close the session: update records and show the results line. */
+function endSession() {
+  game.state = "sessionOver";
+  const made = game.session.score;
+  const limit = CONFIG.session.shotLimit;
+  const isRecord = made > game.records.bestSession;
+  game.records.bestSession = Math.max(game.records.bestSession, made);
+  setStatus(
+    `${game.playerName}: ${made} of ${limit} made` +
+    (isRecord ? " — new personal best!" : ` · personal best ${game.records.bestSession}`) +
+    " Press New session to play again."
+  );
+}
+
+/**
+ * Load (or create) the named player's records, make them active,
+ * and start them a fresh session.
+ * @param {string} name
+ */
+function switchPlayer(name) {
+  game.playerName = name;
+  game.records = allPlayers[name] ?? { bestStreak: 0, bestSession: 0 };
+  allPlayers[name] = game.records;
+  newSession();
+}
+
+/**
+ * Add one player name to the dropdown.
+ * @param {string} name
+ */
+function addOption(name) {
+  const opt = document.createElement("option");
+  opt.value = name;
+  opt.textContent = name;
+  playerSelect.appendChild(opt);
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean} true if a player with this name already exists
+ */
+function playerExists(name) {
+  return [...playerSelect.options].some((o) => o.value === name);
+}
+
+/** Create the player typed in the input box and switch to them. */
+function addPlayerFromInput() {
+  const name = playerNameInput.value.trim();
+  if (name === "" || playerExists(name)) return;
+  addOption(name);
+  playerSelect.value = name;
+  playerNameInput.value = "";
+  switchPlayer(name);
+}
+
+/**
+ * Physics + rules while the ball is in the air.
+ * @param {number} dt seconds since last frame
+ * @param {number} timestamp current time in ms
+ */
+function updateFlight(dt, timestamp) {
+  const previousY = ball.y;
+  ball.integrate(dt);
+  hoop.collide(ball);
+  collideBounds();
+
+  if (!game.scoredThisShot && hoop.isScore(ball, previousY)) {
+    game.scoredThisShot = true;
+    game.session.score += 1;
+    game.session.streak += 1;
+    game.records.bestStreak = Math.max(game.records.bestStreak, game.session.streak);
+    game.celebrateUntil = timestamp + 700;
+    commit();
+  }
+
+  if (shotIsOver()) {
+    if (!game.scoredThisShot) game.session.streak = 0;
+    if (game.session.shotsLeft === 0) {
+      endSession();
+    } else {
+      game.state = "ready"; // the ball stays put: next shot starts here
+    }
+    commit();
+  }
+}
+
+/** Paint the gym-wall gradient behind everything. */
+function drawBackground() {
+  const { width, height } = CONFIG.world;
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#1b2c47");
+  g.addColorStop(1, "#101c30");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+}
+
+/** Hardwood floor, plank seams, and the free-throw marker. */
+function drawCourt() {
+  const { width, height, floorY } = CONFIG.world;
+
+  // Hardwood floor
+  const wood = ctx.createLinearGradient(0, floorY, 0, height);
+  wood.addColorStop(0, "#c08145");
+  wood.addColorStop(1, "#8f5a2b");
+  ctx.fillStyle = wood;
+  ctx.fillRect(0, floorY, width, height - floorY);
+
+  // Plank seams
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  for (let x = 40; x < width; x += 92) {
+    ctx.beginPath();
+    ctx.moveTo(x, floorY);
+    ctx.lineTo(x - 14, height);
+    ctx.stroke();
+  }
+
+  // Free-throw marker under the ball's starting spot
+  ctx.strokeStyle = "rgba(242,234,216,0.5)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(CONFIG.ball.startX - 34, floorY + 1.5);
+  ctx.lineTo(CONFIG.ball.startX + 34, floorY + 1.5);
+  ctx.stroke();
+}
+
+/** Backboard, pole and the net (drawn behind the ball). */
+function drawHoopBack() {
+  const h = CONFIG.hoop;
+
+  // Pole
+  ctx.fillStyle = "#2c3e5c";
+  ctx.fillRect(h.boardX + 8, h.boardTop + 30, 12, CONFIG.world.floorY - h.boardTop - 30);
+
+  // Backboard glass
+  ctx.fillStyle = "rgba(232,238,246,0.88)";
+  ctx.fillRect(h.boardX, h.boardTop, 8, h.boardBottom - h.boardTop);
+
+  // Net (simple crossing lines from rim down)
+  ctx.strokeStyle = "rgba(242,234,216,0.65)";
+  ctx.lineWidth = 1.5;
+  const bottomY = h.rimY + h.netDepth;
+  const inset = 14;
+  for (let i = 0; i <= 4; i++) {
+    const topX = h.rimFrontX + ((h.rimBackX - h.rimFrontX) * i) / 4;
+    const botX = h.rimFrontX + inset + ((h.rimBackX - h.rimFrontX - inset * 2) * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(topX, h.rimY);
+    ctx.lineTo(botX, bottomY);
+    ctx.stroke();
+  }
+}
+
+/**
+ * The rim itself, drawn in front so the ball appears to pass through.
+ * @param {boolean} celebrating true right after a made basket
+ */
+function drawHoopFront(celebrating) {
+  const h = CONFIG.hoop;
+  ctx.strokeStyle = celebrating ? "#ffd35c" : "#e23d28";
+  ctx.lineWidth = h.rimThickness * 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(h.rimFrontX, h.rimY);
+  ctx.lineTo(h.rimBackX, h.rimY);
+  ctx.stroke();
+}
+
+/**
+ * Draw the ball centered at (x, y): floor shadow, body, and seams.
+ * @param {number} x horizontal center in pixels
+ * @param {number} y vertical center in pixels
+ */
+function drawBall(x, y) {
+  const radius = CONFIG.ball.radius;
+
+  // Soft shadow on the floor, fading with height
+  const height = CONFIG.world.floorY - y;
+  const shrink = Math.max(0.35, 1 - height / 700);
+  ctx.fillStyle = `rgba(0,0,0,${0.28 * shrink})`;
+  ctx.beginPath();
+  ctx.ellipse(x, CONFIG.world.floorY + 6, radius * shrink * 1.2, 5 * shrink, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ball body
+  const g = ctx.createRadialGradient(x - 5, y - 6, 3, x, y, radius);
+  g.addColorStop(0, "#f5824e");
+  g.addColorStop(1, "#cf4d1c");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Seams
+  ctx.strokeStyle = "rgba(90,30,8,0.8)";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.moveTo(x - radius, y);
+  ctx.lineTo(x + radius, y);
+  ctx.moveTo(x, y - radius);
+  ctx.quadraticCurveTo(x + radius * 0.7, y, x, y + radius);
+  ctx.stroke();
+}
+
+/**
+ * Simulate the first moments of the flight and draw them as dots —
+ * the physics becomes visible BEFORE the shot, and the arc grows
+ * live as the charge builds. The preview never lies: it reuses the
+ * exact same gravity the real flight will use.
+ */
+function drawTrajectoryPreview() {
+  const shot = launchVelocity();
+  if (shot === null) return;
+  const { previewSteps, previewDt } = CONFIG.input;
+  let x = ball.x;
+  let y = ball.y;
+  let simVx = shot.vx;
+  let simVy = shot.vy;
+
+  ctx.fillStyle = "rgba(255,212,92,0.85)";
+  for (let i = 0; i < previewSteps; i++) {
+    simVy += CONFIG.physics.gravity * previewDt;
+    x += simVx * previewDt;
+    y += simVy * previewDt;
+    if (y > CONFIG.world.floorY) break;
+    if (i % 3 === 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * Vertical charge gauge: fills bottom-up while the hold lasts and
+ * shifts from green to red as power approaches maximum.
+ * @param {number} charge 0..1 charge fraction
+ */
+function drawPowerBar(charge) {
+  const { x, top, bottom, width } = CONFIG.powerBar;
+  const barHeight = bottom - top;
+
+  // Empty gauge outline
+  ctx.strokeStyle = "rgba(242,234,216,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, top, width, barHeight);
+
+  // Fill from the bottom, green → amber → red as power grows
+  const hue = 120 - charge * 120; // 120=green, 0=red
+  ctx.fillStyle = `hsl(${hue}, 85%, 55%)`;
+  const fill = barHeight * charge;
+  ctx.fillRect(x, bottom - fill, width, fill);
+}
+
+let lastTime = 0;
+
+/**
+ * One animation frame: compute dt, update the world, draw it.
+ * @param {number} timestamp milliseconds from requestAnimationFrame
+ */
+function frame(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 1 / 30); // clamp big gaps
+  lastTime = timestamp;
+
+  if (game.state === "flight") updateFlight(dt, timestamp);
+
+  const celebrating = timestamp < game.celebrateUntil;
+  drawBackground();
+  drawCourt();
+  drawHoopBack();
+  if (input.isCharging) {
+    drawTrajectoryPreview();
+    drawPowerBar(power());
+  }
+  drawBall(ball.x, ball.y);
+  drawHoopFront(celebrating);
+
+  requestAnimationFrame(frame); // book the next page of the flipbook
+}
+
+/* ---------- Boot ---------- */
+canvas.addEventListener("pointerdown", onPointerDown);
+canvas.addEventListener("pointermove", onPointerMove);
+canvas.addEventListener("pointerup", onPointerUp);
+canvas.addEventListener("pointercancel", () => { input.isCharging = false; });
+
+playerSelect.addEventListener("change", () => switchPlayer(playerSelect.value));
+document.getElementById("addPlayerButton").addEventListener("click", addPlayerFromInput);
+document.getElementById("newSessionButton").addEventListener("click", newSession);
+
+addOption("Player 1");
+playerSelect.value = "Player 1";
+switchPlayer("Player 1");
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

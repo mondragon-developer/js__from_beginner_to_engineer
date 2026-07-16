@@ -712,30 +712,108 @@ const CHAPTER_TESTS = {
   },
 
   "11": (js, KEY) => {
-    const load = () => {
-      const env = makeEnv();
-      installStubs(env);
-      const X = evalExports(js, [
-        "CONFIG", "ball", "game", "input", "shoot", "updateFlight",
-        "newSession", "switchPlayer", "addPlayerFromInput",
-        "onPointerDown", "onPointerUp", "power", "launchVelocity",
-      ]);
-      return { env, X };
-    };
-    const resolveShot = (X) => {
-      let t = 0;
-      let frames = 0;
-      while (X.game.state === "flight" && frames < 6000) {
-        t += 1000 / 60;
-        X.updateFlight(1 / 60, t);
-        frames += 1;
-      }
-      assert(frames < 6000, "shot never resolved");
-    };
     check("ch11: CONFIG matches the answer key", () => {
-      subsetEqual(load().X.CONFIG, KEY.CONFIG, "CONFIG");
+      installStubs(makeEnv());
+      subsetEqual(evalExports(js, ["CONFIG"]).CONFIG, KEY.CONFIG, "CONFIG");
     });
-    check(`ch11: milestone — after the shot limit the session is over and shooting is refused`, () => {
+    sessionChecks("11", js);
+    holdToChargeChecks("11", js);
+  },
+
+  "12": (js, KEY) => {
+    const load = () => {
+      installStubs(makeEnv());
+      return evalExports(js, ["CONFIG", "Ball", "Hoop"]);
+    };
+    check("ch12: CONFIG matches the answer key; Ball and Hoop are classes", () => {
+      const X = load();
+      subsetEqual(X.CONFIG, KEY.CONFIG, "CONFIG");
+      assert(typeof X.Ball === "function" && typeof X.Hoop === "function", "Ball and Hoop must be classes");
+    });
+    check("ch12: equivalence — Ball behaves identically to the answer key's Ball", () => {
+      const X = load();
+      const a = new X.Ball();
+      const b = new KEY.Ball();
+      a.launch(637, -1002);
+      b.launch(637, -1002);
+      for (let i = 0; i < 300; i++) {
+        a.integrate(1 / 60);
+        b.integrate(1 / 60);
+      }
+      assert(
+        a.x === b.x && a.y === b.y && a.vx === b.vx && a.vy === b.vy,
+        `Ball diverged: (${a.x}, ${a.y}, ${a.vx}, ${a.vy}) vs (${b.x}, ${b.y}, ${b.vx}, ${b.vy})`
+      );
+      assert(a.speed() === b.speed(), "speed() diverged");
+      a.reset();
+      b.reset();
+      assert(a.x === b.x && a.y === b.y && a.vx === 0 && b.vx === 0, "reset() diverged");
+    });
+    check("ch12: equivalence — Hoop collisions and isScore identical to the answer key's", () => {
+      const X = load();
+      const C = X.CONFIG;
+      const scenarios = [
+        { x: C.hoop.rimFrontX - 15, y: C.hoop.rimY, vx: 400, vy: 0 },
+        { x: C.hoop.rimFrontX - 10, y: C.hoop.rimY - 18, vx: 300, vy: 420 },
+        { x: C.hoop.boardX - 16, y: 250, vx: 800, vy: -50 },
+        { x: C.hoop.rimBackX + 3, y: C.hoop.rimY + 8, vx: -250, vy: -100 },
+      ];
+      const xh = new X.Hoop();
+      const kh = new KEY.Hoop();
+      for (const s of scenarios) {
+        const a = new X.Ball();
+        const b = new KEY.Ball();
+        Object.assign(a, s);
+        Object.assign(b, s);
+        xh.collide(a);
+        kh.collide(b);
+        assert(
+          a.x === b.x && a.y === b.y && a.vx === b.vx && a.vy === b.vy,
+          `Hoop diverged on ${JSON.stringify(s)}`
+        );
+      }
+      const mid = (C.hoop.rimFrontX + C.hoop.rimBackX) / 2;
+      const a = new X.Ball();
+      const b = new KEY.Ball();
+      Object.assign(a, { x: mid, y: C.hoop.rimY + 5, vy: 300 });
+      Object.assign(b, { x: mid, y: C.hoop.rimY + 5, vy: 300 });
+      assert(
+        xh.isScore(a, C.hoop.rimY - 5) === kh.isScore(b, C.hoop.rimY - 5) &&
+        xh.isScore(a, C.hoop.rimY - 5) === true,
+        "isScore diverged"
+      );
+    });
+    sessionChecks("12", js);
+    holdToChargeChecks("12", js);
+  },
+};
+
+/**
+ * Chapter 11's session/player milestones, re-run on later function-mode
+ * snapshots (the ch12 class refactor must not change any behavior).
+ */
+function sessionChecks(nn, js) {
+  const load = () => {
+    const env = makeEnv();
+    installStubs(env);
+    const X = evalExports(js, [
+      "CONFIG", "ball", "game", "input", "shoot", "updateFlight",
+      "newSession", "switchPlayer", "addPlayerFromInput",
+      "onPointerDown", "onPointerUp", "power", "launchVelocity",
+    ]);
+    return { env, X };
+  };
+  const resolveShot = (X) => {
+    let t = 0;
+    let frames = 0;
+    while (X.game.state === "flight" && frames < 6000) {
+      t += 1000 / 60;
+      X.updateFlight(1 / 60, t);
+      frames += 1;
+    }
+    assert(frames < 6000, "shot never resolved");
+  };
+  check(`ch${nn}: milestone — after the shot limit the session is over and shooting is refused`, () => {
       const { env, X } = load();
       X.switchPlayer("Player 1"); // what the boot section does
       for (let i = 0; i < X.CONFIG.session.shotLimit; i++) {
@@ -761,7 +839,7 @@ const CHAPTER_TESTS = {
       assert(X.game.session.shotsLeft === X.CONFIG.session.shotLimit, "New session should refill shots");
       assert(X.ball.x === X.CONFIG.ball.startX, "New session puts the ball back on the line");
     });
-    check("ch11: scoring sweep still lands ≥20 baskets (fresh session per shot)", () => {
+  check(`ch${nn}: scoring sweep still lands ≥20 baskets (fresh session per shot)`, () => {
       const { X } = load();
       X.switchPlayer("Sweep");
       let baskets = 0;
@@ -779,7 +857,7 @@ const CHAPTER_TESTS = {
       assert(baskets >= 20, `only ${baskets} baskets in ${shots} shots`);
       console.log(`        (sweep: ${baskets}/${shots} baskets)`);
     });
-    check("ch11: switching players swaps records and starts a fresh session", () => {
+  check(`ch${nn}: switching players swaps records and starts a fresh session`, () => {
       const { X } = load();
       X.switchPlayer("Ana");
       X.game.records.bestStreak = 5;
@@ -790,7 +868,7 @@ const CHAPTER_TESTS = {
       X.switchPlayer("Ana");
       assert(X.game.records.bestStreak === 5 && X.game.records.bestSession === 7, "Ana's records survived the switch");
     });
-    check("ch11: duplicate or blank player names are refused", () => {
+  check(`ch${nn}: duplicate or blank player names are refused`, () => {
       const { env, X } = load();
       const nameInput = env.document.getElementById("playerNameInput");
       const select = env.document.getElementById("playerSelect");
@@ -804,9 +882,7 @@ const CHAPTER_TESTS = {
       X.addPlayerFromInput();
       assert(select.options.length === 1, "blank name refused");
     });
-    holdToChargeChecks("11", js);
-  },
-};
+}
 
 /** Chapter 8's hold-to-charge milestones, re-run on later snapshots. */
 function holdToChargeChecks(nn, js) {
