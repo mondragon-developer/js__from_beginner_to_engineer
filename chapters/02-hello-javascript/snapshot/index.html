@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Free Throw — Chapter 2</title>
+</head>
+<body>
+
+<h1>Free Throw — under construction</h1>
+<p>Press F12 and open the Console tab: your first program is running there.</p>
+
+<script>
+"use strict";
+
+// Your first program: a message to the console.
+console.log("Hello, JavaScript!");
+
+// Variables: labeled lockers, each storing one value.
+const courtWidth = 920;  // the width our game canvas will have, in pixels
+const courtHeight = 540; // and its height
+console.log("The court will be", courtWidth, "by", courtHeight, "pixels.");
+
+// const lockers keep their value forever; let lockers accept a new one.
+let shotsLeft = 10;
+shotsLeft = shotsLeft - 1; // one practice throw
+console.log("Shots left after one practice throw:", shotsLeft);
+
+// Strings hold text, and + glues strings together.
+const gameTitle = "Free Throw";
+document.title = gameTitle + " — " + shotsLeft + " shots left";
+console.log("Now look at the browser tab: JavaScript just renamed it.");
+</script>
+</body>
+</html>
