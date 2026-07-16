@@ -544,46 +544,130 @@ const CHAPTER_TESTS = {
 
   "08": (js, KEY) => {
     gravityAndBounceChecks("08", js, KEY);
+    holdToChargeChecks("08", js);
+  },
+
+  "09": (js, KEY) => {
     const load = () => {
-      const env = makeEnv();
-      installStubs(env);
-      const X = evalExports(js, [
-        "CONFIG", "ball", "input", "onPointerDown", "onPointerMove",
-        "onPointerUp", "power", "launchVelocity",
+      installStubs(makeEnv());
+      return evalExports(js, [
+        "CONFIG", "ball", "integrateBall", "ballSpeed",
+        "collideHoop", "collideBounds",
       ]);
-      return { env, X };
     };
-    check("ch08: milestone — power is 0 at press, 0.5 at half charge, capped at 1", () => {
-      const { env, X } = load();
-      env.now = 5000;
-      X.onPointerDown({ clientX: X.ball.x, clientY: X.ball.y - 150, pointerId: 1 });
-      approx(X.power(), 0, 1e-12, "power at the instant of pressing");
-      env.now += (X.CONFIG.input.chargeTime / 2) * 1000;
-      approx(X.power(), 0.5, 1e-9, "power at half chargeTime");
-      env.now += X.CONFIG.input.chargeTime * 5000;
-      approx(X.power(), 1, 1e-12, "power beyond full charge");
+    check("ch09: CONFIG matches the answer key", () => {
+      subsetEqual(load().CONFIG, KEY.CONFIG, "CONFIG");
     });
-    check("ch08: milestone — launch speed scales min→max, aim angle matches the pointer", () => {
-      const { env, X } = load();
-      env.now = 1000;
-      X.onPointerDown({ clientX: X.ball.x + 100, clientY: X.ball.y - 100, pointerId: 1 });
-      let v = X.launchVelocity();
-      approx(Math.hypot(v.vx, v.vy), X.CONFIG.physics.minLaunchSpeed, 1e-6, "speed at zero charge");
-      approx(Math.atan2(v.vy, v.vx), Math.atan2(-100, 100), 1e-9, "aim angle");
-      env.now += X.CONFIG.input.chargeTime * 1000 + 50;
-      v = X.launchVelocity();
-      approx(Math.hypot(v.vx, v.vy), X.CONFIG.physics.maxLaunchSpeed, 1e-6, "speed at full charge");
+    check("ch09: milestone — the rim deflects a 400 px/s ball", () => {
+      const X = load();
+      const h = X.CONFIG.hoop;
+      X.ball.x = h.rimFrontX - 15;
+      X.ball.y = h.rimY;
+      X.ball.vx = 400;
+      X.ball.vy = 0;
+      X.collideHoop();
+      assert(X.ball.vx < 0, `ball should be pushed back; vx = ${X.ball.vx}`);
+      approx(Math.abs(X.ball.vx), 400 * X.CONFIG.physics.rimRestitution, 1e-6, "rim restitution applied");
+      const dist = Math.hypot(X.ball.x - h.rimFrontX, X.ball.y - h.rimY);
+      approx(dist, X.ball.radius + h.rimThickness, 1e-6, "ball pushed out of overlap");
     });
-    check("ch08: milestone — a pointer sitting on the ball fires no shot", () => {
-      const { X } = load();
-      X.onPointerDown({ clientX: X.ball.x, clientY: X.ball.y, pointerId: 1 });
-      assert(X.launchVelocity() === null, "launchVelocity should be null on the ball");
-      X.onPointerUp();
-      assert(X.ball.vx === 0 && X.ball.vy === 0, "release on the ball must not launch");
-      assert(X.input.isCharging === false, "charge should end on release");
+    check("ch09: milestone — the backboard reflects an 800 px/s ball", () => {
+      const X = load();
+      const h = X.CONFIG.hoop;
+      X.ball.x = h.boardX - X.ball.radius + 2;
+      X.ball.y = (h.boardTop + h.boardBottom) / 2;
+      X.ball.vx = 800;
+      X.ball.vy = 0;
+      X.collideHoop();
+      approx(X.ball.vx, -800 * X.CONFIG.physics.boardRestitution, 1e-6, "board restitution applied");
+      approx(X.ball.x, h.boardX - X.ball.radius, 1e-6, "ball snapped out of the board");
     });
+    check("ch09: milestone — 13 max-power shots never leave the world (900 steps each)", () => {
+      const X = load();
+      const C = X.CONFIG;
+      for (let i = 0; i < 13; i++) {
+        const angle = (i * 2 * Math.PI) / 13;
+        X.ball.x = C.ball.startX;
+        X.ball.y = C.ball.startY;
+        X.ball.vx = Math.cos(angle) * C.physics.maxLaunchSpeed;
+        X.ball.vy = Math.sin(angle) * C.physics.maxLaunchSpeed;
+        for (let s = 0; s < 900; s++) {
+          X.integrateBall(1 / 60);
+          X.collideHoop();
+          X.collideBounds();
+          assert(
+            X.ball.x >= 0 && X.ball.x <= C.world.width && X.ball.y >= 0 && X.ball.y <= C.world.height,
+            `shot ${i} (${((angle * 180) / Math.PI).toFixed(1)}°), step ${s}: center escaped to (${X.ball.x.toFixed(1)}, ${X.ball.y.toFixed(1)})`
+          );
+        }
+      }
+    });
+    check("ch09: floor bounce still reverses vy and rests (no regression)", () => {
+      const X = load();
+      X.ball.x = 180;
+      X.ball.y = 80;
+      X.ball.vx = 120;
+      X.ball.vy = 0;
+      let sawBounce = false;
+      let steps = 0;
+      while (X.ballSpeed() > 0 || steps === 0) {
+        const vyBefore = X.ball.vy;
+        X.integrateBall(1 / 60);
+        X.collideHoop();
+        X.collideBounds();
+        if (vyBefore > 200 && X.ball.vy < 0) sawBounce = true;
+        steps += 1;
+        assert(steps < 4000, "ball never came to rest");
+      }
+      assert(sawBounce, "never observed a bounce");
+    });
+    holdToChargeChecks("09", js);
   },
 };
+
+/** Chapter 8's hold-to-charge milestones, re-run on later snapshots. */
+function holdToChargeChecks(nn, js) {
+  const load = () => {
+    const env = makeEnv();
+    installStubs(env);
+    const X = evalExports(js, [
+      "CONFIG", "ball", "input", "onPointerDown", "onPointerMove",
+      "onPointerUp", "power", "launchVelocity",
+    ]);
+    return { env, X };
+  };
+  check(`ch${nn}: milestone — power is 0 at press, 0.5 at half charge, capped at 1`, () => {
+    const { env, X } = load();
+    env.now = 5000;
+    X.onPointerDown({ clientX: X.ball.x, clientY: X.ball.y - 150, pointerId: 1 });
+    approx(X.power(), 0, 1e-12, "power at the instant of pressing");
+    env.now += (X.CONFIG.input.chargeTime / 2) * 1000;
+    approx(X.power(), 0.5, 1e-9, "power at half chargeTime");
+    env.now += X.CONFIG.input.chargeTime * 5000;
+    approx(X.power(), 1, 1e-12, "power beyond full charge");
+  });
+  check(`ch${nn}: milestone — launch speed scales min→max, aim angle matches the pointer`, () => {
+    const { env, X } = load();
+    env.now = 1000;
+    X.onPointerDown({ clientX: X.ball.x + 100, clientY: X.ball.y - 100, pointerId: 1 });
+    let v = X.launchVelocity();
+    approx(Math.hypot(v.vx, v.vy), X.CONFIG.physics.minLaunchSpeed, 1e-6, "speed at zero charge");
+    approx(Math.atan2(v.vy, v.vx), Math.atan2(-100, 100), 1e-9, "aim angle");
+    env.now += X.CONFIG.input.chargeTime * 1000 + 50;
+    v = X.launchVelocity();
+    approx(Math.hypot(v.vx, v.vy), X.CONFIG.physics.maxLaunchSpeed, 1e-6, "speed at full charge");
+  });
+  check(`ch${nn}: milestone — a pointer sitting on the ball fires no shot`, () => {
+    const { X } = load();
+    X.ball.vx = 0;
+    X.ball.vy = 0;
+    X.onPointerDown({ clientX: X.ball.x, clientY: X.ball.y, pointerId: 1 });
+    assert(X.launchVelocity() === null, "launchVelocity should be null on the ball");
+    X.onPointerUp();
+    assert(X.ball.vx === 0 && X.ball.vy === 0, "release on the ball must not launch");
+    assert(X.input.isCharging === false, "charge should end on release");
+  });
+}
 
 /**
  * Chapter 6's physics milestones, reusable by later pre-class chapters

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Throw — Chapter 9</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas {
+    width: 100%;
+    max-width: 920px;
+    border-radius: 10px;
+    touch-action: none;      /* the canvas owns all touch gestures */
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+/* =====================================================================
+ * CONFIG — the single source of truth for every number in the game.
+ * Frozen so nothing can change it by accident (constants live in one
+ * place, with names instead of magic numbers).
+ * ===================================================================== */
+const CONFIG = Object.freeze({
+  world:   { width: 920, height: 540, floorY: 500 },
+  physics: {
+    gravity: 1800,          // px/s² — pulls the ball down every frame
+    floorRestitution: 0.55, // energy kept after a floor bounce (0..1)
+    floorFriction: 0.98,    // horizontal slowdown while rolling
+    restSpeed: 25,          // below this speed the ball is "at rest"
+    rimRestitution: 0.65,   // energy kept after hitting the rim
+    boardRestitution: 0.6,  // energy kept after hitting the backboard
+    wallRestitution: 0.6,   // energy kept after hitting a wall or ceiling
+    minLaunchSpeed: 450,    // an instant tap still throws this hard
+    maxLaunchSpeed: 1500    // a fully charged shot throws this hard
+  },
+  ball:  { startX: 180, startY: 458, radius: 17 },
+  hoop:  {
+    boardX: 812, boardTop: 168, boardBottom: 318,
+    rimY: 300, rimFrontX: 726, rimBackX: 800,
+    rimThickness: 5, netDepth: 52
+  },
+  input: {
+    chargeTime: 1.2,     // seconds of holding to reach full power
+    previewSteps: 40,
+    previewDt: 1 / 45
+  },
+  powerBar: { x: 26, top: 160, bottom: 460, width: 14 }
+});
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+/* =====================================================================
+ * The ball — back on the free-throw spot, waiting for YOUR shot.
+ * ===================================================================== */
+const ball = {
+  x: CONFIG.ball.startX,
+  y: CONFIG.ball.startY,
+  vx: 0,
+  vy: 0,
+  radius: CONFIG.ball.radius
+};
+
+/* =====================================================================
+ * Input state — one hold-to-charge gesture in progress (or not).
+ * Hold anywhere to START charging, keep holding to build power, aim
+ * with the pointer's position, release to shoot.
+ * ===================================================================== */
+const input = {
+  isCharging: false,
+  chargeStart: 0, // ms timestamp when the hold began
+  aimX: 0,        // current pointer position, world coordinates
+  aimY: 0
+};
+
+/**
+ * Convert a pointer event from screen pixels to world coordinates,
+ * compensating for the canvas being scaled by CSS.
+ * @param {PointerEvent} e
+ * @returns {{x: number, y: number}}
+ */
+function toWorld(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CONFIG.world.width / rect.width;
+  const scaleY = CONFIG.world.height / rect.height;
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+/**
+ * A press anywhere on the court begins charging — power builds for
+ * as long as the hold lasts.
+ * @param {PointerEvent} e
+ */
+function onPointerDown(e) {
+  const p = toWorld(e);
+  canvas.setPointerCapture(e.pointerId);
+  input.isCharging = true;
+  input.chargeStart = performance.now();
+  input.aimX = p.x;
+  input.aimY = p.y;
+}
+
+/** @param {PointerEvent} e */
+function onPointerMove(e) {
+  if (!input.isCharging) return;
+  const p = toWorld(e);
+  input.aimX = p.x;
+  input.aimY = p.y;
+}
+
+/** Finish the hold: fire the charged shot if the aim has a direction. */
+function onPointerUp() {
+  if (!input.isCharging) return;
+  const shot = launchVelocity();
+  input.isCharging = false;
+  if (shot !== null) launchBall(shot.vx, shot.vy);
+}
+
+/**
+ * How charged the shot is right now.
+ * @returns {number} 0 at the instant of pressing, 1 at full charge
+ */
+function power() {
+  const held = (performance.now() - input.chargeStart) / 1000;
+  return Math.min(held / CONFIG.input.chargeTime, 1);
+}
+
+/**
+ * Hold-to-charge rule: DIRECTION comes from where the pointer is
+ * relative to the ball; SPEED comes from how long the hold lasted,
+ * scaled between the minimum and maximum launch speeds.
+ * @returns {{vx: number, vy: number} | null} null when the pointer
+ *   sits exactly on the ball (no direction to aim)
+ */
+function launchVelocity() {
+  const dx = input.aimX - ball.x;
+  const dy = input.aimY - ball.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return null;
+
+  const { minLaunchSpeed, maxLaunchSpeed } = CONFIG.physics;
+  const speed = minLaunchSpeed + power() * (maxLaunchSpeed - minLaunchSpeed);
+  return { vx: (dx / length) * speed, vy: (dy / length) * speed };
+}
+
+/**
+ * Send the ball flying with an initial velocity.
+ * @param {number} vx horizontal speed in px/s
+ * @param {number} vy vertical speed in px/s (negative = upward)
+ */
+function launchBall(vx, vy) {
+  ball.vx = vx;
+  ball.vy = vy;
+}
+
+/**
+ * Advance the ball one time step using projectile motion.
+ * @param {number} dt seconds elapsed since the last frame
+ */
+function integrateBall(dt) {
+  ball.vy += CONFIG.physics.gravity * dt; // gravity accelerates vy
+  ball.x += ball.vx * dt;                 // position follows velocity
+  ball.y += ball.vy * dt;
+}
+
+/** @returns {number} current speed in px/s */
+function ballSpeed() {
+  return Math.hypot(ball.vx, ball.vy);
+}
+
+/**
+ * Treat one rim edge as a small solid circle and reflect the ball
+ * off it — the classic circle-vs-circle collision.
+ * @param {number} px rim point x
+ * @param {number} py rim point y
+ */
+function collideRimPoint(px, py) {
+  const dx = ball.x - px;
+  const dy = ball.y - py;
+  const dist = Math.hypot(dx, dy);
+  const minDist = ball.radius + CONFIG.hoop.rimThickness;
+  if (dist === 0 || dist >= minDist) return;
+
+  // Normal = direction from rim point to ball center
+  const nx = dx / dist;
+  const ny = dy / dist;
+
+  // Push the ball out so it no longer overlaps the rim
+  ball.x = px + nx * minDist;
+  ball.y = py + ny * minDist;
+
+  // Reflect only if the ball is moving INTO the rim
+  const approaching = ball.vx * nx + ball.vy * ny;
+  if (approaching < 0) {
+    const r = CONFIG.physics.rimRestitution;
+    ball.vx -= (1 + r) * approaching * nx;
+    ball.vy -= (1 + r) * approaching * ny;
+  }
+}
+
+/**
+ * The backboard is a vertical wall: if the ball crosses it while
+ * moving right, mirror its horizontal velocity.
+ */
+function collideBoard() {
+  const h = CONFIG.hoop;
+  const withinHeight = ball.y > h.boardTop && ball.y < h.boardBottom;
+  const crossing = ball.x + ball.radius > h.boardX && ball.vx > 0;
+  if (withinHeight && crossing) {
+    ball.x = h.boardX - ball.radius;
+    ball.vx = -ball.vx * CONFIG.physics.boardRestitution;
+  }
+}
+
+/** Bounce the ball off the two rim points and the backboard. */
+function collideHoop() {
+  collideRimPoint(CONFIG.hoop.rimFrontX, CONFIG.hoop.rimY);
+  collideRimPoint(CONFIG.hoop.rimBackX, CONFIG.hoop.rimY);
+  collideBoard();
+}
+
+/** Keep the ball inside the gym: floor, both walls, and the ceiling. */
+function collideBounds() {
+  const { width, floorY } = CONFIG.world;
+  const r = ball.radius;
+  const wall = CONFIG.physics.wallRestitution;
+
+  // Floor: bounce and roll on the hardwood, then come to rest
+  if (ball.y + r > floorY) {
+    ball.y = floorY - r;
+    ball.vy = -ball.vy * CONFIG.physics.floorRestitution;
+    ball.vx *= CONFIG.physics.floorFriction;
+
+    if (ballSpeed() < CONFIG.physics.restSpeed) {
+      ball.vx = 0;
+      ball.vy = 0;
+    }
+  }
+
+  // Ceiling: mirror the vertical velocity
+  if (ball.y - r < 0) {
+    ball.y = r;
+    ball.vy = -ball.vy * wall;
+  }
+
+  // Left wall: mirror the horizontal velocity
+  if (ball.x - r < 0) {
+    ball.x = r;
+    ball.vx = -ball.vx * wall;
+  }
+
+  // Right wall: same rule on the far side
+  if (ball.x + r > width) {
+    ball.x = width - r;
+    ball.vx = -ball.vx * wall;
+  }
+}
+
+/** Paint the gym-wall gradient behind everything. */
+function drawBackground() {
+  const { width, height } = CONFIG.world;
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#1b2c47");
+  g.addColorStop(1, "#101c30");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+}
+
+/** Hardwood floor, plank seams, and the free-throw marker. */
+function drawCourt() {
+  const { width, height, floorY } = CONFIG.world;
+
+  // Hardwood floor
+  const wood = ctx.createLinearGradient(0, floorY, 0, height);
+  wood.addColorStop(0, "#c08145");
+  wood.addColorStop(1, "#8f5a2b");
+  ctx.fillStyle = wood;
+  ctx.fillRect(0, floorY, width, height - floorY);
+
+  // Plank seams
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  for (let x = 40; x < width; x += 92) {
+    ctx.beginPath();
+    ctx.moveTo(x, floorY);
+    ctx.lineTo(x - 14, height);
+    ctx.stroke();
+  }
+
+  // Free-throw marker under the ball's starting spot
+  ctx.strokeStyle = "rgba(242,234,216,0.5)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(CONFIG.ball.startX - 34, floorY + 1.5);
+  ctx.lineTo(CONFIG.ball.startX + 34, floorY + 1.5);
+  ctx.stroke();
+}
+
+/** Backboard, pole and the net (drawn behind the ball). */
+function drawHoopBack() {
+  const h = CONFIG.hoop;
+
+  // Pole
+  ctx.fillStyle = "#2c3e5c";
+  ctx.fillRect(h.boardX + 8, h.boardTop + 30, 12, CONFIG.world.floorY - h.boardTop - 30);
+
+  // Backboard glass
+  ctx.fillStyle = "rgba(232,238,246,0.88)";
+  ctx.fillRect(h.boardX, h.boardTop, 8, h.boardBottom - h.boardTop);
+
+  // Net (simple crossing lines from rim down)
+  ctx.strokeStyle = "rgba(242,234,216,0.65)";
+  ctx.lineWidth = 1.5;
+  const bottomY = h.rimY + h.netDepth;
+  const inset = 14;
+  for (let i = 0; i <= 4; i++) {
+    const topX = h.rimFrontX + ((h.rimBackX - h.rimFrontX) * i) / 4;
+    const botX = h.rimFrontX + inset + ((h.rimBackX - h.rimFrontX - inset * 2) * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(topX, h.rimY);
+    ctx.lineTo(botX, bottomY);
+    ctx.stroke();
+  }
+}
+
+/** The rim itself, drawn in front so the ball appears to pass through. */
+function drawHoopFront() {
+  const h = CONFIG.hoop;
+  ctx.strokeStyle = "#e23d28";
+  ctx.lineWidth = h.rimThickness * 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(h.rimFrontX, h.rimY);
+  ctx.lineTo(h.rimBackX, h.rimY);
+  ctx.stroke();
+}
+
+/**
+ * Draw the ball centered at (x, y): floor shadow, body, and seams.
+ * @param {number} x horizontal center in pixels
+ * @param {number} y vertical center in pixels
+ */
+function drawBall(x, y) {
+  const radius = CONFIG.ball.radius;
+
+  // Soft shadow on the floor, fading with height
+  const height = CONFIG.world.floorY - y;
+  const shrink = Math.max(0.35, 1 - height / 700);
+  ctx.fillStyle = `rgba(0,0,0,${0.28 * shrink})`;
+  ctx.beginPath();
+  ctx.ellipse(x, CONFIG.world.floorY + 6, radius * shrink * 1.2, 5 * shrink, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ball body
+  const g = ctx.createRadialGradient(x - 5, y - 6, 3, x, y, radius);
+  g.addColorStop(0, "#f5824e");
+  g.addColorStop(1, "#cf4d1c");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Seams
+  ctx.strokeStyle = "rgba(90,30,8,0.8)";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.moveTo(x - radius, y);
+  ctx.lineTo(x + radius, y);
+  ctx.moveTo(x, y - radius);
+  ctx.quadraticCurveTo(x + radius * 0.7, y, x, y + radius);
+  ctx.stroke();
+}
+
+/**
+ * Simulate the first moments of the flight and draw them as dots —
+ * the physics becomes visible BEFORE the shot, and the arc grows
+ * live as the charge builds. The preview never lies: it reuses the
+ * exact same gravity the real flight will use.
+ */
+function drawTrajectoryPreview() {
+  const shot = launchVelocity();
+  if (shot === null) return;
+  const { previewSteps, previewDt } = CONFIG.input;
+  let x = ball.x;
+  let y = ball.y;
+  let simVx = shot.vx;
+  let simVy = shot.vy;
+
+  ctx.fillStyle = "rgba(255,212,92,0.85)";
+  for (let i = 0; i < previewSteps; i++) {
+    simVy += CONFIG.physics.gravity * previewDt;
+    x += simVx * previewDt;
+    y += simVy * previewDt;
+    if (y > CONFIG.world.floorY) break;
+    if (i % 3 === 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * Vertical charge gauge: fills bottom-up while the hold lasts and
+ * shifts from green to red as power approaches maximum.
+ * @param {number} charge 0..1 charge fraction
+ */
+function drawPowerBar(charge) {
+  const { x, top, bottom, width } = CONFIG.powerBar;
+  const barHeight = bottom - top;
+
+  // Empty gauge outline
+  ctx.strokeStyle = "rgba(242,234,216,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, top, width, barHeight);
+
+  // Fill from the bottom, green → amber → red as power grows
+  const hue = 120 - charge * 120; // 120=green, 0=red
+  ctx.fillStyle = `hsl(${hue}, 85%, 55%)`;
+  const fill = barHeight * charge;
+  ctx.fillRect(x, bottom - fill, width, fill);
+}
+
+let lastTime = 0;
+
+/**
+ * One animation frame: compute dt, update the world, draw it.
+ * @param {number} timestamp milliseconds from requestAnimationFrame
+ */
+function frame(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 1 / 30); // clamp big gaps
+  lastTime = timestamp;
+
+  integrateBall(dt);
+  collideHoop();
+  collideBounds();
+
+  drawBackground();
+  drawCourt();
+  drawHoopBack();
+  if (input.isCharging) {
+    drawTrajectoryPreview();
+    drawPowerBar(power());
+  }
+  drawBall(ball.x, ball.y);
+  drawHoopFront();
+
+  requestAnimationFrame(frame); // book the next page of the flipbook
+}
+
+/* ---------- Boot ---------- */
+canvas.addEventListener("pointerdown", onPointerDown);
+canvas.addEventListener("pointermove", onPointerMove);
+canvas.addEventListener("pointerup", onPointerUp);
+canvas.addEventListener("pointercancel", () => { input.isCharging = false; });
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
