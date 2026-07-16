@@ -710,6 +710,102 @@ const CHAPTER_TESTS = {
     });
     holdToChargeChecks("10", js);
   },
+
+  "11": (js, KEY) => {
+    const load = () => {
+      const env = makeEnv();
+      installStubs(env);
+      const X = evalExports(js, [
+        "CONFIG", "ball", "game", "input", "shoot", "updateFlight",
+        "newSession", "switchPlayer", "addPlayerFromInput",
+        "onPointerDown", "onPointerUp", "power", "launchVelocity",
+      ]);
+      return { env, X };
+    };
+    const resolveShot = (X) => {
+      let t = 0;
+      let frames = 0;
+      while (X.game.state === "flight" && frames < 6000) {
+        t += 1000 / 60;
+        X.updateFlight(1 / 60, t);
+        frames += 1;
+      }
+      assert(frames < 6000, "shot never resolved");
+    };
+    check("ch11: CONFIG matches the answer key", () => {
+      subsetEqual(load().X.CONFIG, KEY.CONFIG, "CONFIG");
+    });
+    check(`ch11: milestone — after the shot limit the session is over and shooting is refused`, () => {
+      const { env, X } = load();
+      X.switchPlayer("Player 1"); // what the boot section does
+      for (let i = 0; i < X.CONFIG.session.shotLimit; i++) {
+        assert(X.game.state === "ready", `state before shot ${i + 1} should be ready, got ${X.game.state}`);
+        env.now += 100;
+        X.onPointerDown({ clientX: X.ball.x + 60, clientY: X.ball.y - 80, pointerId: 1 });
+        env.now += 200;
+        X.onPointerUp();
+        assert(X.game.state === "flight", `shot ${i + 1} should fire`);
+        resolveShot(X);
+      }
+      assert(X.game.state === "sessionOver", `state should be sessionOver, got ${X.game.state}`);
+      assert(X.game.session.shotsLeft === 0, "shotsLeft should be 0");
+      const statusText = env.document.getElementById("sessionStatus").textContent;
+      assert(statusText.length > 0, "session results line should be shown");
+      X.onPointerDown({ clientX: X.ball.x + 60, clientY: X.ball.y - 80, pointerId: 1 });
+      assert(X.input.isCharging === false, "charging must be refused while sessionOver");
+      X.onPointerUp();
+      assert(X.game.state === "sessionOver", "shooting while sessionOver must be refused");
+      assert(X.game.session.shotsLeft === 0, "a refused shot must not consume shots");
+      X.newSession();
+      assert(X.game.state === "ready", "New session should return to ready");
+      assert(X.game.session.shotsLeft === X.CONFIG.session.shotLimit, "New session should refill shots");
+      assert(X.ball.x === X.CONFIG.ball.startX, "New session puts the ball back on the line");
+    });
+    check("ch11: scoring sweep still lands ≥20 baskets (fresh session per shot)", () => {
+      const { X } = load();
+      X.switchPlayer("Sweep");
+      let baskets = 0;
+      let shots = 0;
+      for (let speed = 900; speed <= 1500; speed += 50) {
+        for (let deg = 45; deg <= 75; deg += 3) {
+          X.newSession();
+          X.shoot(Math.cos((deg * Math.PI) / 180) * speed, -Math.sin((deg * Math.PI) / 180) * speed);
+          resolveShot(X);
+          assert(X.game.session.score === 0 || X.game.session.score === 1, "one point per swish");
+          baskets += X.game.session.score;
+          shots += 1;
+        }
+      }
+      assert(baskets >= 20, `only ${baskets} baskets in ${shots} shots`);
+      console.log(`        (sweep: ${baskets}/${shots} baskets)`);
+    });
+    check("ch11: switching players swaps records and starts a fresh session", () => {
+      const { X } = load();
+      X.switchPlayer("Ana");
+      X.game.records.bestStreak = 5;
+      X.game.records.bestSession = 7;
+      X.switchPlayer("Ben");
+      assert(X.game.records.bestStreak === 0, "Ben starts with fresh records");
+      assert(X.game.session.shotsLeft === X.CONFIG.session.shotLimit, "Ben starts a fresh session");
+      X.switchPlayer("Ana");
+      assert(X.game.records.bestStreak === 5 && X.game.records.bestSession === 7, "Ana's records survived the switch");
+    });
+    check("ch11: duplicate or blank player names are refused", () => {
+      const { env, X } = load();
+      const nameInput = env.document.getElementById("playerNameInput");
+      const select = env.document.getElementById("playerSelect");
+      nameInput.value = "  Ana  ";
+      X.addPlayerFromInput();
+      assert(select.options.length === 1 && select.options[0].value === "Ana", "trimmed name added once");
+      nameInput.value = "Ana";
+      X.addPlayerFromInput();
+      assert(select.options.length === 1, "duplicate name refused");
+      nameInput.value = "   ";
+      X.addPlayerFromInput();
+      assert(select.options.length === 1, "blank name refused");
+    });
+    holdToChargeChecks("11", js);
+  },
 };
 
 /** Chapter 8's hold-to-charge milestones, re-run on later snapshots. */
