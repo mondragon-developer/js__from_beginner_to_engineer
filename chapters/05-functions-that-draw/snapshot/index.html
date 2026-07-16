@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Free Throw — Chapter 5</title>
+<style>
+  body { background: #0d1626; margin: 0; display: flex; justify-content: center; padding: 16px; }
+  canvas { border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="court" width="920" height="540"></canvas>
+
+<script>
+"use strict";
+
+/* =====================================================================
+ * CONFIG — the single source of truth for every number in the game.
+ * Frozen so nothing can change it by accident (constants live in one
+ * place, with names instead of magic numbers).
+ * ===================================================================== */
+const CONFIG = Object.freeze({
+  world: { width: 920, height: 540, floorY: 500 },
+  ball:  { startX: 180, startY: 458, radius: 17 },
+  hoop:  {
+    boardX: 812, boardTop: 168, boardBottom: 318,
+    rimY: 300, rimFrontX: 726, rimBackX: 800,
+    rimThickness: 5
+  }
+});
+
+const canvas = document.getElementById("court");
+const ctx = canvas.getContext("2d");
+
+/** Paint the gym wall and the hardwood floor. */
+function drawCourt() {
+  ctx.fillStyle = "#16233a";
+  ctx.fillRect(0, 0, CONFIG.world.width, CONFIG.world.height);
+
+  ctx.fillStyle = "#a06a38";
+  ctx.fillRect(0, CONFIG.world.floorY, CONFIG.world.width, CONFIG.world.height - CONFIG.world.floorY);
+}
+
+/**
+ * Draw the ball centered at (x, y).
+ * @param {number} x horizontal center in pixels
+ * @param {number} y vertical center in pixels
+ */
+function drawBall(x, y) {
+  ctx.fillStyle = "#e0662f";
+  ctx.beginPath();
+  ctx.arc(x, y, CONFIG.ball.radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw the pole, the backboard glass, and the rim. */
+function drawHoop() {
+  const h = CONFIG.hoop;
+
+  // Pole
+  ctx.fillStyle = "#2c3e5c";
+  ctx.fillRect(h.boardX + 8, h.boardTop + 30, 12, CONFIG.world.floorY - h.boardTop - 30);
+
+  // Backboard glass
+  ctx.fillStyle = "rgba(232,238,246,0.88)";
+  ctx.fillRect(h.boardX, h.boardTop, 8, h.boardBottom - h.boardTop);
+
+  // Rim: a thick line from the front lip to the backboard
+  ctx.strokeStyle = "#e23d28";
+  ctx.lineWidth = h.rimThickness * 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(h.rimFrontX, h.rimY);
+  ctx.lineTo(h.rimBackX, h.rimY);
+  ctx.stroke();
+}
+
+// Draw the scene, back to front.
+drawCourt();
+drawHoop();
+drawBall(CONFIG.ball.startX, CONFIG.ball.startY);
+</script>
+</body>
+</html>
