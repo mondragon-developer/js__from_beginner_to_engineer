@@ -1,0 +1,10 @@
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+*.swp
+
+# Node (only used by the verification harness — no dependencies, but just in case)
+node_modules/
