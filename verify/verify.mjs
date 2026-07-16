@@ -623,6 +623,93 @@ const CHAPTER_TESTS = {
     });
     holdToChargeChecks("09", js);
   },
+
+  "10": (js, KEY) => {
+    const load = () => {
+      const env = makeEnv();
+      installStubs(env);
+      const X = evalExports(js, [
+        "CONFIG", "ball", "game", "input", "shoot", "updateFlight", "isScore",
+        "onPointerDown", "onPointerMove", "onPointerUp", "power",
+        "launchVelocity", "integrateBall", "ballSpeed", "collideHoop", "collideBounds",
+      ]);
+      return { env, X };
+    };
+    /** Fire one shot from the free-throw spot and run flight to rest. */
+    const playShot = (X, angleRad, speed) => {
+      X.ball.x = X.CONFIG.ball.startX;
+      X.ball.y = X.CONFIG.ball.startY;
+      X.ball.vx = 0;
+      X.ball.vy = 0;
+      X.game.state = "ready";
+      X.shoot(Math.cos(angleRad) * speed, -Math.sin(angleRad) * speed);
+      let t = 0;
+      let frames = 0;
+      while (X.game.state === "flight" && frames < 6000) {
+        t += 1000 / 60;
+        X.updateFlight(1 / 60, t);
+        frames += 1;
+      }
+      assert(frames < 6000, "shot never resolved");
+    };
+    check("ch10: CONFIG matches the answer key", () => {
+      subsetEqual(load().X.CONFIG, KEY.CONFIG, "CONFIG");
+    });
+    check("ch10: rim and backboard physics unchanged (no regression)", () => {
+      const { X } = load();
+      const h = X.CONFIG.hoop;
+      X.ball.x = h.rimFrontX - 15;
+      X.ball.y = h.rimY;
+      X.ball.vx = 400;
+      X.ball.vy = 0;
+      X.collideHoop();
+      approx(X.ball.vx, -400 * X.CONFIG.physics.rimRestitution, 1e-6, "rim restitution");
+      X.ball.x = h.boardX - X.ball.radius + 2;
+      X.ball.y = (h.boardTop + h.boardBottom) / 2;
+      X.ball.vx = 800;
+      X.ball.vy = 0;
+      X.collideHoop();
+      approx(X.ball.vx, -800 * X.CONFIG.physics.boardRestitution, 1e-6, "board restitution");
+    });
+    check("ch10: milestone — scoring sweep lands ≥20 baskets, one point per swish", () => {
+      const { X } = load();
+      let baskets = 0;
+      let shots = 0;
+      for (let speed = 900; speed <= 1500; speed += 50) {
+        for (let deg = 45; deg <= 75; deg += 3) {
+          const before = X.game.score;
+          playShot(X, (deg * Math.PI) / 180, speed);
+          const gained = X.game.score - before;
+          assert(gained === 0 || gained === 1, `shot gained ${gained} points (guard broken?)`);
+          baskets += gained;
+          shots += 1;
+        }
+      }
+      assert(baskets >= 20, `only ${baskets} baskets in ${shots} shots (need ≥ 20)`);
+      console.log(`        (sweep: ${baskets}/${shots} baskets)`);
+    });
+    check("ch10: milestone — the state machine refuses aiming mid-flight", () => {
+      const { X } = load();
+      X.shoot(600, -600);
+      assert(X.game.state === "flight", "shoot should enter flight");
+      X.onPointerDown({ clientX: 400, clientY: 300, pointerId: 1 });
+      assert(X.input.isCharging === false, "charging must be refused mid-flight");
+      let t = 0;
+      let frames = 0;
+      while (X.game.state === "flight" && frames < 6000) {
+        t += 1000 / 60;
+        X.updateFlight(1 / 60, t);
+        frames += 1;
+      }
+      assert(X.game.state === "ready", "flight should end back in ready");
+      const restX = X.ball.x;
+      X.onPointerDown({ clientX: restX + 80, clientY: X.ball.y - 80, pointerId: 1 });
+      assert(X.input.isCharging === true, "aiming allowed again once ready");
+      const v = X.launchVelocity();
+      assert(v !== null && v.vx > 0 && v.vy < 0, "next shot aims from where the ball stopped");
+    });
+    holdToChargeChecks("10", js);
+  },
 };
 
 /** Chapter 8's hold-to-charge milestones, re-run on later snapshots. */
