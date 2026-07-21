@@ -8,3 +8,8 @@ Thumbs.db
 
 # Node (only used by the verification harness — no dependencies, but just in case)
 node_modules/
+
+# Internal working notes — kept local, not part of the published course
+PLAN.md
+COURSE-STATUS.md
+media/SCREENSHOTS-TODO.md
