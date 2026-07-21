@@ -1,10 +1,10 @@
-# Capítulo 7 — Soluciones desarrolladas
+# Capítulo 7 - Soluciones desarrolladas
 
 *Léelo en: [English](README.md) | **Español***
 
 Cada solución muestra el cambio exacto contra [`../../snapshot/index.html`](../../snapshot/index.html).
 
-## 1 — Guiado: el círculo de media cancha
+## 1 - Guiado: el círculo de media cancha
 
 Al final de `drawCourt`, después del marcador de tiro libre:
 
@@ -17,7 +17,7 @@ Al final de `drawCourt`, después del marcador de tiro libre:
   ctx.stroke();
 ```
 
-Espera — ¿un círculo completo, no un arco? Mira el orden de dibujo: la mitad inferior del círculo cae *sobre* la banda del piso, que ya estaba pintada, así que ambas mitades quedan visibles como trazos sobre madera y se ve raro. La versión limpia traza solo la mitad superior:
+Espera - ¿un círculo completo, no un arco? Mira el orden de dibujo: la mitad inferior del círculo cae *sobre* la banda del piso, que ya estaba pintada, así que ambas mitades quedan visibles como trazos sobre madera y se ve raro. La versión limpia traza solo la mitad superior:
 
 ```js
   ctx.arc(460, floorY, 60, Math.PI, 0);  // top half only: from 180° to 0°
@@ -25,7 +25,7 @@ Espera — ¿un círculo completo, no un arco? Mira el orden de dibujo: la mitad
 
 Ambas se probaron contra el canvas real; la versión de medio arco es la que se lee como marca de cancha. (Ángulos: `Math.PI` es el lado izquierdo del círculo, `0` el derecho; la dirección por defecto barre por arriba.)
 
-## 2 — Independiente: el cuadro del tirador
+## 2 - Independiente: el cuadro del tirador
 
 En `drawHoopBack`, justo después del vidrio del tablero:
 
@@ -36,9 +36,9 @@ En `drawHoopBack`, justo después del vidrio del tablero:
   ctx.strokeRect(h.boardX + 1, h.rimY - 34, 6, 26);
 ```
 
-Razonando desde la geometría en lugar de adivinar números: el cuadro va sobre el vidrio (`boardX + 1`, dentro del tablero de 8 de ancho), con su base cerca de la línea del aro (`rimY - 34 + 26 = rimY - 8`), y apagado (alfa `0.55`) para que se lea como pintura. `strokeRect` es el hermano de contorno de `fillRect` — una llamada, sin trazado.
+Razonando desde la geometría en lugar de adivinar números: el cuadro va sobre el vidrio (`boardX + 1`, dentro del tablero de 8 de ancho), con su base cerca de la línea del aro (`rimY - 34 + 26 = rimY - 8`), y apagado (alfa `0.55`) para que se lea como pintura. `strokeRect` es el hermano de contorno de `fillRect` - una llamada, sin trazado.
 
-## 3 — Reto: la red parametrizada
+## 3 - Reto: la red parametrizada
 
 ```js
   const strands = 7;
@@ -52,4 +52,4 @@ Razonando desde la geometría en lugar de adivinar números: el cuadro va sobre 
   }
 ```
 
-**Por qué el divisor debe coincidir con la cuenta:** `i / strands` es la *fracción del recorrido* — debe llegar exactamente a `1` cuando `i` alcanza su último valor, para que la hebra final caiga exactamente en el extremo lejano del aro. Deja el divisor en `4` con `strands = 7` y las hebras desfilan más allá del borde del aro hacia el tablero (la fracción llega a 7/4 = 175%). El patrón para recordar: **un bucle que interpola usa la misma N en su cota y en su divisor.** Con `strands` como variable, esa invariante no puede romperse en silencio — que es exactamente la lección de CONFIG del Capítulo 4, aplicada a un bucle.
+**Por qué el divisor debe coincidir con la cuenta:** `i / strands` es la *fracción del recorrido* - debe llegar exactamente a `1` cuando `i` alcanza su último valor, para que la hebra final caiga exactamente en el extremo lejano del aro. Deja el divisor en `4` con `strands = 7` y las hebras desfilan más allá del borde del aro hacia el tablero (la fracción llega a 7/4 = 175%). El patrón para recordar: **un bucle que interpola usa la misma N en su cota y en su divisor.** Con `strands` como variable, esa invariante no puede romperse en silencio - que es exactamente la lección de CONFIG del Capítulo 4, aplicada a un bucle.

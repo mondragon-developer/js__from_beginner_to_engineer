@@ -1,10 +1,10 @@
-# Chapter 13 — Worked solutions
+# Chapter 13 - Worked solutions
 
 *Read this in: **English** | [Español](README.es.md)*
 
 Each solution shows the exact change against [`../../snapshot/index.html`](../../snapshot/index.html).
 
-## 1 — Guided: theming the rim
+## 1 - Guided: theming the rim
 
 In `Renderer`:
 
@@ -24,13 +24,13 @@ And `#drawHoopFront`'s first paint line becomes:
     ctx.strokeStyle = this.#rimColor(hoop, celebrating);
 ```
 
-— wait, no: `this.#rimColor(celebrating)`. (That deliberate stumble is the lesson in miniature: when you extracted the method, the *only* information it needed was `celebrating` — the hoop's geometry has nothing to do with its color. Extracting forces you to notice what a computation actually depends on.)
+\- wait, no: `this.#rimColor(celebrating)`. (That deliberate stumble is the lesson in miniature: when you extracted the method, the *only* information it needed was `celebrating` - the hoop's geometry has nothing to do with its color. Extracting forces you to notice what a computation actually depends on.)
 
-Changing the celebration color was then one edit inside one private method whose name says exactly what it owns. The class didn't just *allow* "one place" — its structure made anything else feel wrong. That feeling is the payoff of the whole chapter.
+Changing the celebration color was then one edit inside one private method whose name says exactly what it owns. The class didn't just *allow* "one place" - its structure made anything else feel wrong. That feeling is the payoff of the whole chapter.
 
-## 2 — Independent: the FPS counter
+## 2 - Independent: the FPS counter
 
-The version that keeps the Game's signature clean — Renderer tracks its own time:
+The version that keeps the Game's signature clean - Renderer tracks its own time:
 
 ```js
   constructor(canvas) {
@@ -51,9 +51,9 @@ The version that keeps the Game's signature clean — Renderer tracks its own ti
 
 …called last in `draw`, so it renders on top.
 
-**The trade-off, honestly:** this version makes the Renderer *impure* — it now carries state (`lastDrawTime`) and reads a clock, so calling `draw` twice per frame would report nonsense FPS. The alternative (pass `dt` into `draw`) keeps the Renderer a pure state-to-pixels function but widens a signature that four other arguments already crowd, for a debug feature. Either sentence is a fine justification; what matters is that you *wrote* one. The finished game, for what it's worth, ships no FPS counter — the third option, "don't", is also engineering.
+**The trade-off, honestly:** this version makes the Renderer *impure* - it now carries state (`lastDrawTime`) and reads a clock, so calling `draw` twice per frame would report nonsense FPS. The alternative (pass `dt` into `draw`) keeps the Renderer a pure state-to-pixels function but widens a signature that four other arguments already crowd, for a debug feature. Either sentence is a fine justification; what matters is that you *wrote* one. The finished game, for what it's worth, ships no FPS counter - the third option, "don't", is also engineering.
 
-## 3 — Stretch: `KeyboardController`
+## 3 - Stretch: `KeyboardController`
 
 ```js
 /** Space held = charge; arrow keys nudge the aim point; release Space to fire. */
@@ -110,6 +110,6 @@ class KeyboardController {
     this.input = new KeyboardController(
 ```
 
-Everything else — the preview, the power bar, the `canAim` gate, the launch pipeline — works unchanged, because the Renderer reads `input.isCharging`/`input.power()`/`input.launchVelocity()` and the Game supplied the same two callbacks. That's Dependency Inversion cashing its check: the Game depends on a *shape* (four constructor arguments, three readable members), and anything with that shape slots in.
+Everything else - the preview, the power bar, the `canAim` gate, the launch pipeline - works unchanged, because the Renderer reads `input.isCharging`/`input.power()`/`input.launchVelocity()` and the Game supplied the same two callbacks. That's Dependency Inversion cashing its check: the Game depends on a *shape* (four constructor arguments, three readable members), and anything with that shape slots in.
 
-Honest footnotes, because a sketch should confess its edges: `power()` and `launchVelocity()` being *identical* in both controllers is duplication — a real codebase might extract a shared base class or helper; the `canvas` parameter goes unused (kept for contract parity — defensible, but a smell worth noticing); and key events on `window` mean the controller fires even when the page has focus elsewhere in an embedded context. Every one of these is the kind of note you'd now write in a code review — which is rather the point of the course you're two chapters from finishing.
+Honest footnotes, because a sketch should confess its edges: `power()` and `launchVelocity()` being *identical* in both controllers is duplication - a real codebase might extract a shared base class or helper; the `canvas` parameter goes unused (kept for contract parity - defensible, but a smell worth noticing); and key events on `window` mean the controller fires even when the page has focus elsewhere in an embedded context. Every one of these is the kind of note you'd now write in a code review - which is rather the point of the course you're two chapters from finishing.
